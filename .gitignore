@@ -1,0 +1,18 @@
+.git
+.env
+__pycache__
+venv
+venv/*
+README.html
+.DS_STORE
+build
+build/*
+dist
+dist/*
+airflow_provider_ray.egg-info
+airflow_provider_ray.egg-info/*
+
+# PyCharm
+.idea
+.idea/
+*.iml
