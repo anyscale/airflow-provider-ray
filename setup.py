@@ -1,21 +1,22 @@
-from setuptools import setup
+from setuptools import setup, find_packages
+import os
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-# 'Scale and schedule machine learning and data wrangling workflows using Ray and Airflow together'
 setup(
     name='airflow-provider-ray',
     description='An Apache Airflow provider for Ray',
-    entry_points='''
-        [apache_airflow_provider]
-        provider_info=ray_provider.__init__:get_provider_info
-    ''',
+    entry_points={
+        "apache_airflow_provider": [
+          "provider_info=ray_provider.__init__:get_provider_info"
+        ]
+    },
     long_description=long_description,
     long_description_content_type='text/markdown',
     license='Apache License 2.0',
     version='0.1.0.alpha0',
-    packages=['ray_provider'],
+    packages=find_packages(include=['*']),
     zip_safe=False,
     install_requires=[
         'apache-airflow>=2.0',
@@ -31,4 +32,5 @@ setup(
     maintainer_email='rob@astronomer.io',
     keywords=['ray','distributed','compute','airflow'],
     python_requires='~=3.7',
+    include_package_data=True
 )
