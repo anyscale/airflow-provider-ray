@@ -4,7 +4,6 @@ from typing import Callable, Optional
 import ray
 from airflow.operators.python import task
 from ray_provider.hooks.ray_client import RayClientHook
-from ray_provider.ray_backend import RayBackend
 
 log = logging.getLogger(__name__)
 
