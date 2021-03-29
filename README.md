@@ -19,19 +19,24 @@ orchestrate and schedule Ray tasks using Airflow. It is actively maintained
 and being developed to bring production-ready workflows to Ray using Airflow.
 Thie release contains everything needed to begin building these workflows using
 the Airlfow taskflow API.
-```
+
+```yaml
 Release: 0.1.0.alpha0
 ```
 
 ## Requirements
 
+Visit the [Ray Project page](https://ray.io/)
+for more info on Ray.
+
 > ⚠️ The server version and client version (build) of Ray MUST be
-the same
+the same.
 
 ```yaml
 - Python Version == 3.7
 - Airflow Version >= 2.0.0
-- Ray Version == 2.0.0.dev0 (cp37-cp37m-manylinux2014_x86_64 @ 2157021fd31f6192a14165c880e5fa4c01c7d5ca)
+- Ray Version == 2.0.0.dev0
+(cp37-cp37m-manylinux2014_x86_64 @ fd4ed3acfe2c4c2819d8cd02364d0c5cbc7516ea)
 - Filelock >= 3.0.0
 ```
 
@@ -50,20 +55,58 @@ task on the ray cluster.
 ## Configuration and Usage
 
 1. In your Airflow `Dockerfile`, you will need to add an environment variable to
-specify you custom backend
+specify your custom backend, along with the provider wheel install. Add the following:
 
     ```Dockerfile
+    FROM quay.io/astronomer/ap-airflow:2.0.0-3-buster-onbuild
+    USER root
+    RUN pip install airflow_provider_ray-0.1.0a0-py3-none-any.whl
+    RUN pip uninstall astronomer-airflow-version-check -y
+    USER astro
     ENV AIRFLOW__CORE__XCOM_BACKEND=ray_provider.xcom.ray_backend.RayBackend
     ```
 
-2. In the Airflow UI, add an Airflow Pool with the Following
+    > Check ap-airflow version, if unsure, change to `ap-airflow:latest-onbuild`
+
+2. We are using a Ray `2.0.0.dev0` version, which is rebuilt nightly. To ensure
+quality, here we pin to a specific commit hash
+`fd4ed3acfe2c4c2819d8cd02364d0c5cbc7516ea` and python version `3.7`. To get
+the correct wheel for your system, you will need to follow this format in your
+`requirements.txt` file:
+
+    ```http
+    https://s3-us-west-2.amazonaws.com/ray-wheels/master/{COMMIT_HASH}/ray-{RAY_VERSION}-{PYTHON_VERSION}-{PYTHON_VERSION}m-{OS_VERSION}_intel.whl
+    ```
+
+    For linux based systems and linux containers add:
+
+    ```http
+    https://s3-us-west-2.amazonaws.com/ray-wheels/master/fd4ed3acfe2c4c2819d8cd02364d0c5cbc7516ea/ray-2.0.0.dev0-cp37-cp37m-manylinux2014_x86_64.whl
+    ```
+
+    For MacOS system, the wheel version naming goes as `macosx_10_13`, so that would
+    be:
+
+    ```http
+    https://s3-us-west-2.amazonaws.com/ray-wheels/master/fd4ed3acfe2c4c2819d8cd02364d0c5cbc7516ea/ray-2.0.0.dev0-cp37-cp37m-macosx_10_13_intel.whl
+    ```
+
+    And For Windows (which is experimental) it would be:
+
+    ```http
+    https://s3-us-west-2.amazonaws.com/ray-wheels/master/fd4ed3acfe2c4c2819d8cd02364d0c5cbc7516ea/ray-2.0.0.dev0-cp37-cp37-win_amd64.whl
+    ```
+
+3. Start your Airflow environment and open the UI.
+
+4. In the Airflow UI, add an `Airflow Pool` with the following:
 
     ```bash
     Pool (name): ray_worker_pool
     Slots: 25
     ```
 
-3. In the Airflow UI, add an Airflow Connection with the following:
+5. In the Airflow UI, add an `Airflow Connection` with the following:
 
     ```bash
     Conn Id: ray_cluster_connection
@@ -72,7 +115,7 @@ specify you custom backend
     Port: 10001
     ```
 
-4. In your Airflow DAG file, you must include the following in your
+6. In your Airflow DAG python file, you must include the following in your
 `default_args` dictionary:
 
     ```python
@@ -96,7 +139,7 @@ specify you custom backend
         # do stuff
     ```
 
-5. Using the taskflow API, your airflow task should now use the
+7. Using the taskflow API, your airflow task should now use the
 `@ray_task` decorator for any ray task, like:
 
     ```python
@@ -112,4 +155,4 @@ specify you custom backend
 
 ## Connections
 
-[Info on building a connection to Ray]
+TBD - [Info on building a connection to Ray]

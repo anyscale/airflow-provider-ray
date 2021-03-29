@@ -4,6 +4,7 @@ import os
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
+
 setup(
     name='airflow-provider-ray',
     description='An Apache Airflow provider for Ray',
@@ -22,7 +23,7 @@ setup(
         'apache-airflow>=2.0',
         'pandas>=1.0.0',
         'filelock>=3.0.0',
-        'ray@https://s3-us-west-2.amazonaws.com/ray-wheels/master/fd4ed3acfe2c4c2819d8cd02364d0c5cbc7516ea/ray-2.0.0.dev0-cp37-cp37m-manylinux2014_x86_64.whl#egg=ray'
+        'ray==2.0.0.dev0'
     ],
     setup_requires=['setuptools', 'wheel'],
     extras_require={},
