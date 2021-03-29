@@ -54,7 +54,9 @@ task on the ray cluster.
 
 ## Configuration and Usage
 
-1. In your Airflow `Dockerfile`, you will need to add an environment variable to
+1. Add the provider package wheel file to the root directory of your Airflow project.
+
+2. In your Airflow `Dockerfile`, you will need to add an environment variable to
 specify your custom backend, along with the provider wheel install. Add the following:
 
     ```Dockerfile
@@ -68,7 +70,7 @@ specify your custom backend, along with the provider wheel install. Add the foll
 
     > Check ap-airflow version, if unsure, change to `ap-airflow:latest-onbuild`
 
-2. We are using a Ray `2.0.0.dev0` version, which is rebuilt nightly. To ensure
+3. We are using a Ray `2.0.0.dev0` version, which is rebuilt nightly. To ensure
 quality, here we pin to a specific commit hash
 `fd4ed3acfe2c4c2819d8cd02364d0c5cbc7516ea` and python version `3.7`. To get
 the correct wheel for your system, you will need to follow this format in your
@@ -91,22 +93,16 @@ the correct wheel for your system, you will need to follow this format in your
     https://s3-us-west-2.amazonaws.com/ray-wheels/master/fd4ed3acfe2c4c2819d8cd02364d0c5cbc7516ea/ray-2.0.0.dev0-cp37-cp37m-macosx_10_13_intel.whl
     ```
 
-    And For Windows (which is experimental) it would be:
+4. Start your Airflow environment and open the UI.
 
-    ```http
-    https://s3-us-west-2.amazonaws.com/ray-wheels/master/fd4ed3acfe2c4c2819d8cd02364d0c5cbc7516ea/ray-2.0.0.dev0-cp37-cp37-win_amd64.whl
-    ```
-
-3. Start your Airflow environment and open the UI.
-
-4. In the Airflow UI, add an `Airflow Pool` with the following:
+5. In the Airflow UI, add an `Airflow Pool` with the following:
 
     ```bash
     Pool (name): ray_worker_pool
     Slots: 25
     ```
 
-5. In the Airflow UI, add an `Airflow Connection` with the following:
+6. In the Airflow UI, add an `Airflow Connection` with the following:
 
     ```bash
     Conn Id: ray_cluster_connection
@@ -115,7 +111,7 @@ the correct wheel for your system, you will need to follow this format in your
     Port: 10001
     ```
 
-6. In your Airflow DAG python file, you must include the following in your
+7. In your Airflow DAG python file, you must include the following in your
 `default_args` dictionary:
 
     ```python
@@ -139,7 +135,7 @@ the correct wheel for your system, you will need to follow this format in your
         # do stuff
     ```
 
-7. Using the taskflow API, your airflow task should now use the
+8. Using the taskflow API, your airflow task should now use the
 `@ray_task` decorator for any ray task, like:
 
     ```python
@@ -153,6 +149,19 @@ the correct wheel for your system, you will need to follow this format in your
             return pd.DataFrame(df.sum()).T
     ```
 
+## Project Contributors and Maintainers
+
+This project is built in collaboration between
+[Astronomer](https://www.astronomer.io/) and
+[Anyscale](https://www.anyscale.com/),
+with active contributions from:
+
+- [Pete DeJoy](https://github.com/petedejoy)
+- [Daniel Imberman](https://github.com/dimberman)
+- [Rob Deeb](https://github.com/mrrobby)
+- [Richard Liaw](https://github.com/richardliaw)
+
 ## Connections
 
 TBD - [Info on building a connection to Ray]
+
