@@ -36,7 +36,7 @@ the same.
 - Python Version == 3.7
 - Airflow Version >= 2.0.0
 - Ray Version == 2.0.0.dev0
-(cp37-cp37m-manylinux2014_x86_64 @ fd4ed3acfe2c4c2819d8cd02364d0c5cbc7516ea)
+(cp37-cp37m-manylinux2014_x86_64 @ 0f9d1bb223bb1ba5edbdd557f2f2f3551a51061f)
 - Filelock >= 3.0.0
 ```
 
@@ -72,7 +72,7 @@ specify your custom backend, along with the provider wheel install. Add the foll
 
 3. We are using a Ray `2.0.0.dev0` version, which is rebuilt nightly. To ensure
 quality, here we pin to a specific commit hash
-`fd4ed3acfe2c4c2819d8cd02364d0c5cbc7516ea` and python version `3.7`. To get
+`0f9d1bb223bb1ba5edbdd557f2f2f3551a51061f` and python version `3.7`. To get
 the correct wheel for your system, you will need to follow this format in your
 `requirements.txt` file:
 
@@ -83,14 +83,14 @@ the correct wheel for your system, you will need to follow this format in your
     For linux based systems and linux containers add:
 
     ```http
-    https://s3-us-west-2.amazonaws.com/ray-wheels/master/fd4ed3acfe2c4c2819d8cd02364d0c5cbc7516ea/ray-2.0.0.dev0-cp37-cp37m-manylinux2014_x86_64.whl
+    https://s3-us-west-2.amazonaws.com/ray-wheels/master/0f9d1bb223bb1ba5edbdd557f2f2f3551a51061f/ray-2.0.0.dev0-cp37-cp37m-manylinux2014_x86_64.whl
     ```
 
     For MacOS system, the wheel version naming goes as `macosx_10_13`, so that would
     be:
 
     ```http
-    https://s3-us-west-2.amazonaws.com/ray-wheels/master/fd4ed3acfe2c4c2819d8cd02364d0c5cbc7516ea/ray-2.0.0.dev0-cp37-cp37m-macosx_10_13_intel.whl
+    https://s3-us-west-2.amazonaws.com/ray-wheels/master/0f9d1bb223bb1ba5edbdd557f2f2f3551a51061f/ray-2.0.0.dev0-cp37-cp37m-macosx_10_13_intel.whl
     ```
 
 4. Start your Airflow environment and open the UI.
