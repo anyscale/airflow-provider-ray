@@ -1,3 +1,4 @@
+from typing import List
 import logging
 import os
 import pickle
@@ -11,19 +12,21 @@ from sqlalchemy import (
     DateTime
 )
 import ray
+from ray import ObjectRef as RayObjectRef
 from ray_provider.hooks.ray_client import RayClientHook
 
 log = logging.getLogger(__name__)
 
 _KVStore = None
 
+from ray.util.client.common import ClientObjectRef
+ObjectRef = (ClientObjectRef, RayObjectRef)
 
 def get_or_create_kv_store(identifier, allow_new=False):
     global _KVStore
     if _KVStore:
         return _KVStore
     else:
-        log.info("CREATE NEW _KVStore")
         _KVStore = KVStore(identifier, allow_new=allow_new)
     return _KVStore
 
@@ -38,11 +41,25 @@ class KVStore:
         def ping(self):
             return 1
 
-        def get(self, key, signal=None):
+        def get(self, key: str, signal=None) -> "ObjectRef":
             return self.store.get(key)
 
-        def put(self, key, value, signal=None):
+        def put(self, key, value: "ObjectRef", signal=None):
+            assert isinstance(value, ObjectRef), value
             self.store[key] = value
+
+        def execute(self, fn, *args, **kwargs) -> str:
+            ray_args = [self.get(a) for a in args]
+            print(f"got {ray_args}")
+            def status_function(*args_, **kwargs_):
+                return 0, fn(*args_, **kwargs_)
+            remote_fn = ray.remote(status_function)
+            status, result = remote_fn.options(num_returns=2).remote(
+                *ray_args, **kwargs)
+            ray.get(status)  # raise error if needed
+            print(f"dumping {result}")
+            self.put(str(result), result)
+            return str(result)
 
     def __init__(self, identifier, backend_cls=None, allow_new=False):
         backend_cls = backend_cls or RayBackend
@@ -76,7 +93,8 @@ class KVStore:
         log.debug("fetching ray_kv lock.")
         with FileLock("/tmp/ray_kv.lock"):
             log.debug(f"[ser] putting obj_id to kvstore ({type(value)})")
-            res = self.actor.put.remote(key, value)
+            assert isinstance(value, ObjectRef)
+            res = self.actor.put.remote(key, [value])
             log.debug("[ser] waiting to finish writing to kv store")
             ray.get(res)
 
@@ -84,10 +102,19 @@ class KVStore:
         log.debug("fetching ray_kv lock.")
         with FileLock("/tmp/ray_kv.lock"):
             log.debug("[deser] fetching val reference")
-            val = self.actor.get.remote(key=key)
-            log.debug("[deser] fetched val reference")
-            return val
+            obj_ref = self.actor.get.remote(key=key)
+            log.debug("[deser] dereference object ref")
+            obj_id = ray.get(obj_ref)
+            assert isinstance(obj_id, ObjectRef)
+            log.debug("[deser] fetched obj_id reference")
+            return obj_id
 
+    def execute(self, fn, *args, **kwargs):
+        log.debug("fetching ray_kv lock.")
+        with FileLock("/tmp/ray_kv.lock"):
+            log.debug(f"Executing.")
+            res = self.actor.execute.remote(fn, *args, **kwargs)
+            return ray.get(res)
 
 class RayBackend(BaseXCom):
     """
@@ -109,55 +136,55 @@ class RayBackend(BaseXCom):
 
     @staticmethod
     def serialize_value(value, key, task_id, dag_id, execution_date):
+        return pickle.dumps(value)
+        # with FileLock("/tmp/ray_backend.lock") as lock:
+        #     log.info('Start serialization')
+        #     log.debug(f"{value}, {key}, {task_id}, {dag_id}, {execution_date}")
 
-        with FileLock("/tmp/ray_backend.lock") as lock:
-            log.info('Start serialization')
-            log.debug(f"{value}, {key}, {task_id}, {dag_id}, {execution_date}")
+        #     name = RayBackend.generate_object_key(
+        #         key=key,
+        #         task_id=task_id,
+        #         dag_id=dag_id
+        #     )
 
-            name = RayBackend.generate_object_key(
-                key=key,
-                task_id=task_id,
-                dag_id=dag_id
-            )
+        #     kv_store = get_or_create_kv_store(
+        #         identifier=RayBackend.store_identifier,
+        #         allow_new=True
+        #     )
 
-            kv_store = get_or_create_kv_store(
-                identifier=RayBackend.store_identifier,
-                allow_new=True
-            )
+        #     try:
+        #         kv_store.put(key=name, value=value)
+        #     except Exception as e:
+        #         log.error('Exception serializing to plasma: %s' % e)
+        #         raise
 
-            try:
-                kv_store.put(key=name, value=value)
-            except Exception as e:
-                log.error('Exception serializing to plasma: %s' % e)
-                raise
-
-            log.info("Serialization Success")
-            return pickle.dumps(name)
+        #     log.info("Serialization Success")
+            # return pickle.dumps(name)
 
     @staticmethod
     def deserialize_value(result):
-
-        with FileLock("/tmp/ray_backend.lock") as lock:
-            log.info("Start deserialization")
-            log.debug('[deser] loading value from result')
-            name = pickle.loads(result.value)
-            log.debug("[deser] name is %s" % name)
-            kv_store = get_or_create_kv_store(
-                identifier=RayBackend.store_identifier)
-            try:
-                ret = kv_store.get(key=name)
-            except Exception as e:
-                log.error('Exception deserializing from plasma: %s' % e)
-                raise
-            log.info("Deserialization Success")
-            return ret
+        return pickle.loads(result.value)
+        # with FileLock("/tmp/ray_backend.lock") as lock:
+        #     log.info("Start deserialization")
+        #     log.debug('[deser] loading value from result')
+        #     name = pickle.loads(result.value)
+        #     log.debug("[deser] result name is %s" % name)
+        #     kv_store = get_or_create_kv_store(
+        #         identifier=RayBackend.store_identifier)
+        #     try:
+        #         ret = kv_store.get(key=name)
+        #     except Exception as e:
+        #         log.error('Exception deserializing from plasma: %s' % e)
+        #         raise
+        #     log.info("Deserialization Success")
+        #     return ret
 
     @staticmethod
     def on_failure_callback(context):
         """
-        Basically when the DAG state changes then 
-        we want to delete the ray resources. That is, wait 
-        for other tasks to complete first then 
+        Basically when the DAG state changes then
+        we want to delete the ray resources. That is, wait
+        for other tasks to complete first then
         get the kvstore and cleanup
         """
         log.error('Cleaning up from Failure: %s' % context)
@@ -313,7 +340,7 @@ class RayBackend(BaseXCom):
         """
         Checks whether the immediate dependents of this task instance have failed.
         This is meant to be used to wait for cleanup.
-        This is useful when you want to delete references but wait until 
+        This is useful when you want to delete references but wait until
         other tasks finish.
         :param session: SQLAlchemy ORM Session
         :type session: Session

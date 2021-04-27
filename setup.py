@@ -23,7 +23,7 @@ setup(
         'apache-airflow>=2.0',
         'pandas>=1.0.0',
         'filelock>=3.0.0',
-        'ray==2.0.0.dev0'
+        'ray'
     ],
     setup_requires=['setuptools', 'wheel'],
     extras_require={},

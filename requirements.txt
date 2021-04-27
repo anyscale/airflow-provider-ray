@@ -1,4 +1,6 @@
-https://s3-us-west-2.amazonaws.com/ray-wheels/master/0f9d1bb223bb1ba5edbdd557f2f2f3551a51061f/ray-2.0.0.dev0-cp37-cp37m-manylinux2014_x86_64.whl
+ray
 filelock
 numpy
-pandas
+pandas==1.2.4
+modin
+xgboost_ray
