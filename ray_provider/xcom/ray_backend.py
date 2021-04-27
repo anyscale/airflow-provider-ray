@@ -89,25 +89,25 @@ class KVStore:
                             lifetime="detached")\
                    .remote()
 
-    def put(self, key, value):
-        log.debug("fetching ray_kv lock.")
-        with FileLock("/tmp/ray_kv.lock"):
-            log.debug(f"[ser] putting obj_id to kvstore ({type(value)})")
-            assert isinstance(value, ObjectRef)
-            res = self.actor.put.remote(key, [value])
-            log.debug("[ser] waiting to finish writing to kv store")
-            ray.get(res)
+    # def put(self, key, value):
+    #     log.debug("fetching ray_kv lock.")
+    #     with FileLock("/tmp/ray_kv.lock"):
+    #         log.debug(f"[ser] putting obj_id to kvstore ({type(value)})")
+    #         assert isinstance(value, ObjectRef)
+    #         res = self.actor.put.remote(key, [value])
+    #         log.debug("[ser] waiting to finish writing to kv store")
+    #         ray.get(res)
 
-    def get(self, key):
-        log.debug("fetching ray_kv lock.")
-        with FileLock("/tmp/ray_kv.lock"):
-            log.debug("[deser] fetching val reference")
-            obj_ref = self.actor.get.remote(key=key)
-            log.debug("[deser] dereference object ref")
-            obj_id = ray.get(obj_ref)
-            assert isinstance(obj_id, ObjectRef)
-            log.debug("[deser] fetched obj_id reference")
-            return obj_id
+    # def get(self, key):
+    #     log.debug("fetching ray_kv lock.")
+    #     with FileLock("/tmp/ray_kv.lock"):
+    #         log.debug("[deser] fetching val reference")
+    #         obj_ref = self.actor.get.remote(key=key)
+    #         log.debug("[deser] dereference object ref")
+    #         obj_id = ray.get(obj_ref)
+    #         assert isinstance(obj_id, ObjectRef)
+    #         log.debug("[deser] fetched obj_id reference")
+    #         return obj_id
 
     def execute(self, fn, *args, **kwargs):
         log.debug("fetching ray_kv lock.")
