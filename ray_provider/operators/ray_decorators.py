@@ -4,22 +4,21 @@ from typing import Callable, Optional
 import ray
 from airflow.operators.python import task
 from ray_provider.hooks.ray_client import RayClientHook
+from ray_provider.xcom.ray_backend import RayBackend, get_or_create_kv_store
 
 log = logging.getLogger(__name__)
-
 
 def ray_wrapped(f, ray_conn_id='ray_default'):
 
     @functools.wraps(f)
-    def wrapper(*args, **kwargs):
-
-        hook = RayClientHook(ray_conn_id=ray_conn_id)
-        log.debug("[wrapper] connecting in before calling the remote task")
-        hook.connect()
-        log.debug("[wrapper] Executing the remote task")
-        ret = ray.remote(f).remote(*args, **kwargs)
-
-        return ret
+    def wrapper(*args, **kwargs) -> "ray.ObjectRef":
+        log.info("[wrapper] Got executor.")
+        executor = get_or_create_kv_store(
+            identifier=RayBackend.store_identifier, allow_new=True)
+        log.info(f"[wrapper] Launching task (with {args}, {kwargs}.")
+        ret_str = executor.execute(f, *args, **kwargs)
+        log.info("[wrapper] Remote task finished")
+        return ret_str
     return wrapper
 
 

@@ -47,7 +47,7 @@ class RayClientHook(HttpHook):
         if self.base_url is None:
             conn = self.get_conn()
 
-        log.debug("Connection base_url is %s" % self.base_url)
+        log.info("Connection base_url is %s" % self.base_url)
         if not ray.util.client.ray.is_connected():
             ray.util.connect(self.base_url)
             log.info("New Ray Connection Established")
@@ -61,7 +61,8 @@ class RayClientHook(HttpHook):
         ray.util.disconnect()
 
     # TODO: Create LocationTypes and persist data to S3 or GCS
-    def cleanup(self, handles=[]):
+    def cleanup(self, handles=None):
+        handles = handles or []
         for handle in handles:
             log.info('Cleaning ray actors')
             log.debug('Killing handle %s' % handle)
