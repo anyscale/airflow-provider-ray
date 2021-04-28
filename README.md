@@ -21,7 +21,7 @@ Thie release contains everything needed to begin building these workflows using
 the Airlfow taskflow API.
 
 ```yaml
-Release: 0.1.0.alpha0
+Release: 0.1.1.alpha0
 ```
 
 ## Requirements
