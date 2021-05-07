@@ -7,10 +7,7 @@ from time import sleep
 from airflow.models.xcom import BaseXCom
 from airflow.utils.session import provide_session
 from airflow.utils.state import State
-from sqlalchemy import (
-    func,
-    DateTime
-)
+from sqlalchemy import (func, DateTime)
 import ray
 from ray import ObjectRef as RayObjectRef
 from ray_provider.hooks.ray_client import RayClientHook
@@ -21,6 +18,7 @@ _KVStore = None
 
 from ray.util.client.common import ClientObjectRef
 ObjectRef = (ClientObjectRef, RayObjectRef)
+
 
 def get_or_create_kv_store(identifier, allow_new=False):
     global _KVStore
@@ -34,7 +32,6 @@ def get_or_create_kv_store(identifier, allow_new=False):
 class KVStore:
     @ray.remote
     class _KvStoreActor(object):
-
         def __init__(self):
             self.store = {}
 
@@ -48,15 +45,34 @@ class KVStore:
             assert isinstance(value, ObjectRef), value
             self.store[key] = value
 
-        def execute(self, fn, *args, **kwargs) -> str:
+        def execute(self, *, fn, args, kwargs, eager=False) -> str:
             ray_args = [self.get(a) for a in args]
-            print(f"got {ray_args}")
+            ray_kwargs = {k: self.get(v) for k, v in kwargs.items()}
+
             def status_function(*args_, **kwargs_):
                 return 0, fn(*args_, **kwargs_)
-            remote_fn = ray.remote(status_function)
-            status, result = remote_fn.options(num_returns=2).remote(
-                *ray_args, **kwargs)
-            ray.get(status)  # raise error if needed
+
+            if eager:
+                # 'eager' gets past the Ray ownership model
+                # by allowing users to selectively execute tasks
+                # directly on the metadata store actor.
+                # this means that created objects like Modin Dataframes
+                # will not be GC'ed upon task completion.
+                if ray_args:
+                    ray_args = ray.get(ray_args)
+                if ray_kwargs:
+                    kwargs_list = list(ray_kwargs.items())
+                    keys, values = zip(*kwargs_list)
+                    if values:
+                        values = ray.get(values)
+                    ray_kwargs = dict(zip(keys, values))
+                result = fn(*ray_args, **ray_kwargs)
+                result = ray.put(result)
+            else:
+                remote_fn = ray.remote(status_function)
+                status, result = remote_fn.options(num_returns=2).remote(
+                    *ray_args, **ray_kwargs)
+                ray.get(status)  # raise error if needed
             print(f"dumping {result}")
             self.put(str(result), result)
             return str(result)
@@ -109,12 +125,14 @@ class KVStore:
     #         log.debug("[deser] fetched obj_id reference")
     #         return obj_id
 
-    def execute(self, fn, *args, **kwargs):
+    def execute(self, fn, *, args, kwargs, eager=False):
         log.debug("fetching ray_kv lock.")
         with FileLock("/tmp/ray_kv.lock"):
             log.debug(f"Executing.")
-            res = self.actor.execute.remote(fn, *args, **kwargs)
+            res = self.actor.execute.remote(
+                fn=fn, args=args, kwargs=kwargs, eager=eager)
             return ray.get(res)
+
 
 class RayBackend(BaseXCom):
     """
@@ -137,29 +155,6 @@ class RayBackend(BaseXCom):
     @staticmethod
     def serialize_value(value, key, task_id, dag_id, execution_date):
         return pickle.dumps(value)
-        # with FileLock("/tmp/ray_backend.lock") as lock:
-        #     log.info('Start serialization')
-        #     log.debug(f"{value}, {key}, {task_id}, {dag_id}, {execution_date}")
-
-        #     name = RayBackend.generate_object_key(
-        #         key=key,
-        #         task_id=task_id,
-        #         dag_id=dag_id
-        #     )
-
-        #     kv_store = get_or_create_kv_store(
-        #         identifier=RayBackend.store_identifier,
-        #         allow_new=True
-        #     )
-
-        #     try:
-        #         kv_store.put(key=name, value=value)
-        #     except Exception as e:
-        #         log.error('Exception serializing to plasma: %s' % e)
-        #         raise
-
-        #     log.info("Serialization Success")
-            # return pickle.dumps(name)
 
     @staticmethod
     def deserialize_value(result):
