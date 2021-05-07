@@ -16,7 +16,7 @@ setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     license='Apache License 2.0',
-    version='0.1.1.alpha0',
+    version='0.2.0.rc1',
     packages=find_packages(include=['*']),
     zip_safe=False,
     install_requires=[
