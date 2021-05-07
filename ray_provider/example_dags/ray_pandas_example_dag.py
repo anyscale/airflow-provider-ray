@@ -1,35 +1,30 @@
 import json
 from airflow.decorators import dag, task
-from datetime import datetime
+from airflow.utils.dates import days_ago
 from airflow.operators.dummy_operator import DummyOperator
 import ray
 from ray_provider.operators.ray_decorators import ray_task
 import numpy as np
 import pandas as pd
 from ray_provider.xcom.ray_backend import RayBackend
+from datetime import datetime
 
+# These args will get passed on to each operator
+# You can override them on a per-task basis during operator initialization
 default_args = {
     'owner': 'airflow',
     'on_success_callback': RayBackend.on_success_callback,
     'on_failure_callback': RayBackend.on_failure_callback
 }
-
-
-@dag(
-    default_args=default_args,
-    schedule_interval=None,
-    start_date=datetime(2021, 3, 26, 0, 0, 0),
-    tags=['pandas-example']
-)
-def ray_pandas_example():
+@dag(default_args=default_args, schedule_interval=None, start_date=datetime(2021, 1, 1, 0, 0, 0), tags=['pandas-example'])
+def task_flow_ray_pandas_example():
     @ray_task(ray_conn_id='ray_cluster_connection')
     def build_dataframe() -> pd.DataFrame:
         """
         #### build random dataframe task
 
         """
-        df = pd.DataFrame(np.random.randint(
-            0, 1000, size=(1000, 6)), columns=list('ABCDEF'))
+        df = pd.DataFrame(np.random.randint(0,1000, size=(1000, 6)), columns=list('ABCDEF'))
 
         return df
 
@@ -78,13 +73,13 @@ def ray_pandas_example():
 
     @ray_task(ray_conn_id='ray_cluster_connection')
     def load_results(
-        min_val: int,
-        max_val: int,
-        mean: float,
-        std: float,
-        var: float,
-        median: float
-    ) -> None:
+            min_val: int,
+            max_val: int,
+            mean: float,
+            std: float,
+            var: float,
+            median: float
+        ) -> None:
         """
         #### Load task
         This will print max and min
@@ -120,6 +115,4 @@ def ray_pandas_example():
 
     kickoff_dag >> build_raw_df
     load_results >> complete_dag
-
-
-ray_pandas_example = ray_pandas_example()
+task_flow_ray_pandas_example = task_flow_ray_pandas_example()

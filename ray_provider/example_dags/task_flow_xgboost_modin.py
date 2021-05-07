@@ -9,6 +9,7 @@ from ray_provider.operators.ray_decorators import ray_task
 import numpy as np
 import xgboost_ray as xgb
 from ray_provider.xcom.ray_backend import RayBackend
+from datetime import datetime
 
 # These args will get passed on to each operator
 # You can override them on a per-task basis during operator initialization
@@ -25,7 +26,7 @@ SIMPLE = False
 
 DataFrame = Any
 
-@dag(default_args=default_args, schedule_interval=None, start_date=days_ago(2), tags=['xgboost-modin-only'])
+@dag(default_args=default_args, schedule_interval=None, start_date=datetime(2021, 1, 1, 0, 0, 0), tags=['xgboost-modin'])
 def xgboost_modin_breast_cancer():
     @ray_task(eager=True, **task_args)
     def load_dataframe() -> DataFrame:

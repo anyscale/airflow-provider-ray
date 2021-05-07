@@ -34,7 +34,7 @@ RAY_PARAMS = xgbr.RayParams(
 ROOT_DIR = '.'
 LOCAL_DIR = f'{ROOT_DIR}/ray_results'
 
-@dag(default_args=default_args, schedule_interval=None, start_date=datetime(2021, 1, 1, 0, 0, 0), tags=['xgboost-pandas-only'])
+@dag(default_args=default_args, schedule_interval=None, start_date=datetime(2021, 1, 1, 0, 0, 0), tags=['xgboost-pandas-tune'])
 def xgboost_pandas_tune_breast_cancer():
     @ray_task(**task_args)
     def load_dataframe() -> "ray.ObjectRef":
