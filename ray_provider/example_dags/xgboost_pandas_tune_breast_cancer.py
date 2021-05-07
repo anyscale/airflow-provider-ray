@@ -28,7 +28,7 @@ task_args = {"ray_conn_id": "ray_cluster_connection"}
 SIMPLE = False
 
 # Change actors and cpus per actor here as per resources allow
-RAY_PARAMS = xgbr.RayParams(
+XGB_RAY_PARAMS = xgbr.RayParams(
     max_actor_restarts=1, num_actors=1, cpus_per_actor=1)
 
 ROOT_DIR = '.'
@@ -117,7 +117,7 @@ def xgboost_pandas_tune_breast_cancer():
         bst = xgbr.train(
             params=config,
             dtrain=dtrain,
-            ray_params=RAY_PARAMS,
+            ray_params=XGB_RAY_PARAMS,
             num_boost_round=100,
             evals=evallist,
             callbacks=[TuneReportCheckpointCallback(filename=f"model.xgb")])
@@ -158,7 +158,7 @@ def xgboost_pandas_tune_breast_cancer():
             mode="min",
             local_dir=LOCAL_DIR,
             # You can add "gpu": 0.1 to allocate GPUs
-            resources_per_trial=RAY_PARAMS.get_tune_resources(),
+            resources_per_trial=XGB_RAY_PARAMS.get_tune_resources(),
             config=search_space,
             num_samples=4,
             scheduler=scheduler)
