@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+
 def get_provider_info():
     return {
         "package-name": "airflow-provider-ray",
