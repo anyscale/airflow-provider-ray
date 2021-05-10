@@ -137,7 +137,7 @@ version of Ray, you can to follow this format to build the wheel url in your
 `@ray_task` decorator for any ray task, like:
 
     ```python
-    from ray_provider.operators.ray_decorators import ray_task
+    from ray_provider.decorators.ray_decorators import ray_task
     .
     .
     def ray_example_dag():
