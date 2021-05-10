@@ -2,6 +2,7 @@
 .env
 __pycache__
 venv
+.egg*
 venv/*
 README.html
 .DS_STORE

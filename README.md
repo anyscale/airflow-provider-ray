@@ -135,7 +135,7 @@ memory.To start, in your environment with ray installed, run:
 parameter as `task_args`, like:
 
     ```python
-    from ray_provider.decorators.ray_decorators import ray_task
+    from ray_provider.decorators import ray_task
 
     default_args = {
         'on_success_callback': RayBackend.on_success_callback,
