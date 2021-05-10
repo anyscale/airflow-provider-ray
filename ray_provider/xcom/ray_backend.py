@@ -47,6 +47,21 @@ class KVStore:
             self.store[key] = value
 
         def execute(self, *, fn, args, kwargs, eager=False) -> str:
+            """Execute a function.
+
+            TODO: allow resource access.
+
+            Args:
+                fn: function to be executed, either on this actor or
+                    in a separate remote task.
+                args: function args.
+                kwargs: function kwargs.
+                eager (bool): This value gets past the Ray ownership model
+                    by allowing users to selectively execute tasks
+                    directly on the metadata store actor.
+                    this means that created objects like Modin Dataframes
+                    will not be GC'ed upon task completion.
+            """
             ray_args = [self.get(a) for a in args]
             ray_kwargs = {k: self.get(v) for k, v in kwargs.items()}
 
@@ -54,11 +69,6 @@ class KVStore:
                 return 0, fn(*args_, **kwargs_)
 
             if eager:
-                # 'eager' gets past the Ray ownership model
-                # by allowing users to selectively execute tasks
-                # directly on the metadata store actor.
-                # this means that created objects like Modin Dataframes
-                # will not be GC'ed upon task completion.
                 if ray_args:
                     ray_args = ray.get(ray_args)
                 if ray_kwargs:
@@ -75,7 +85,6 @@ class KVStore:
                     *ray_args, **ray_kwargs
                 )
                 ray.get(status)  # raise error if needed
-            print(f"dumping {result}")
             self.put(str(result), result)
             return str(result)
 
@@ -87,6 +96,13 @@ class KVStore:
         self.actor = self.get_actor(identifier, allow_new)
 
     def get_actor(self, identifier, allow_new):
+        """Creates the executor actor.
+
+        Args:
+            identifier (str): Uniquely identifies the DAG.
+            allow_new (bool): whether to create a new actor if the actor
+                doesn't exist.
+        """
         try:
             log.debug(f"trying to get this actor {identifier} here")
             ret = ray.get_actor(identifier)
@@ -96,35 +112,16 @@ class KVStore:
             log.info(e)
             if allow_new:
                 log.info("Creating new Actor with identifier %s" % e)
-                return self.create_new_actor(identifier)
+                return self._create_new_actor(identifier)
             else:
                 raise
 
-    def create_new_actor(self, identifier):
+    def _create_new_actor(self, identifier):
         self.is_new = True
         return self._KvStoreActor.options(name=identifier, lifetime="detached").remote()
 
-    # def put(self, key, value):
-    #     log.debug("fetching ray_kv lock.")
-    #     with FileLock("/tmp/ray_kv.lock"):
-    #         log.debug(f"[ser] putting obj_id to kvstore ({type(value)})")
-    #         assert isinstance(value, ObjectRef)
-    #         res = self.actor.put.remote(key, [value])
-    #         log.debug("[ser] waiting to finish writing to kv store")
-    #         ray.get(res)
-
-    # def get(self, key):
-    #     log.debug("fetching ray_kv lock.")
-    #     with FileLock("/tmp/ray_kv.lock"):
-    #         log.debug("[deser] fetching val reference")
-    #         obj_ref = self.actor.get.remote(key=key)
-    #         log.debug("[deser] dereference object ref")
-    #         obj_id = ray.get(obj_ref)
-    #         assert isinstance(obj_id, ObjectRef)
-    #         log.debug("[deser] fetched obj_id reference")
-    #         return obj_id
-
     def execute(self, fn, *, args, kwargs, eager=False):
+        """Invokes the underlying actor with given args."""
         log.debug("fetching ray_kv lock.")
         with FileLock("/tmp/ray_kv.lock"):
             log.debug(f"Executing.")
@@ -135,9 +132,9 @@ class KVStore:
 
 
 class RayBackend(BaseXCom):
-    """
-    Custom Backend Serving to use Ray and the Plasma Store
-    as an object store. There is still some gRPC issues
+    """Custom Backend Serving to use Ray.
+
+    Note(rob): There is still some gRPC issues
     and a difficult to reproduce race condition where
     an actor seems to die.
     """
@@ -160,20 +157,6 @@ class RayBackend(BaseXCom):
     @staticmethod
     def deserialize_value(result):
         return pickle.loads(result.value)
-        # with FileLock("/tmp/ray_backend.lock") as lock:
-        #     log.info("Start deserialization")
-        #     log.debug('[deser] loading value from result')
-        #     name = pickle.loads(result.value)
-        #     log.debug("[deser] result name is %s" % name)
-        #     kv_store = get_or_create_kv_store(
-        #         identifier=RayBackend.store_identifier)
-        #     try:
-        #         ret = kv_store.get(key=name)
-        #     except Exception as e:
-        #         log.error('Exception deserializing from plasma: %s' % e)
-        #         raise
-        #     log.info("Deserialization Success")
-        #     return ret
 
     @staticmethod
     def on_failure_callback(context):
