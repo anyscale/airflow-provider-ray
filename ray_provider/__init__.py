@@ -21,5 +21,5 @@ def get_provider_info():
         "package-name": "airflow-provider-ray",
         "name": "Ray Provider",
         "description": "An Apache Airflow provider for Ray.",
-        "versions": ["0.2.0.rc1"]
+        "versions": ["0.2.0.rc1"],
     }

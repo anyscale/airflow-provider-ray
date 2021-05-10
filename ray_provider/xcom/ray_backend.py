@@ -7,7 +7,7 @@ from time import sleep
 from airflow.models.xcom import BaseXCom
 from airflow.utils.session import provide_session
 from airflow.utils.state import State
-from sqlalchemy import (func, DateTime)
+from sqlalchemy import func, DateTime
 import ray
 from ray import ObjectRef as RayObjectRef
 from ray_provider.hooks.ray_client import RayClientHook
@@ -17,6 +17,7 @@ log = logging.getLogger(__name__)
 _KVStore = None
 
 from ray.util.client.common import ClientObjectRef
+
 ObjectRef = (ClientObjectRef, RayObjectRef)
 
 
@@ -71,7 +72,8 @@ class KVStore:
             else:
                 remote_fn = ray.remote(status_function)
                 status, result = remote_fn.options(num_returns=2).remote(
-                    *ray_args, **ray_kwargs)
+                    *ray_args, **ray_kwargs
+                )
                 ray.get(status)  # raise error if needed
             print(f"dumping {result}")
             self.put(str(result), result)
@@ -100,10 +102,7 @@ class KVStore:
 
     def create_new_actor(self, identifier):
         self.is_new = True
-        return self._KvStoreActor\
-                   .options(name=identifier,
-                            lifetime="detached")\
-                   .remote()
+        return self._KvStoreActor.options(name=identifier, lifetime="detached").remote()
 
     # def put(self, key, value):
     #     log.debug("fetching ray_kv lock.")
@@ -130,7 +129,8 @@ class KVStore:
         with FileLock("/tmp/ray_kv.lock"):
             log.debug(f"Executing.")
             res = self.actor.execute.remote(
-                fn=fn, args=args, kwargs=kwargs, eager=eager)
+                fn=fn, args=args, kwargs=kwargs, eager=eager
+            )
             return ray.get(res)
 
 
@@ -141,8 +141,9 @@ class RayBackend(BaseXCom):
     and a difficult to reproduce race condition where
     an actor seems to die.
     """
-    conn_id = os.getenv('ray_cluster_conn_id', "ray_cluster_connection")
-    store_identifier = os.getenv('ray_store_identifier', "ray_kv_store")
+
+    conn_id = os.getenv("ray_cluster_conn_id", "ray_cluster_connection")
+    store_identifier = os.getenv("ray_store_identifier", "ray_kv_store")
 
     @staticmethod
     def get_hook():
@@ -182,51 +183,49 @@ class RayBackend(BaseXCom):
         for other tasks to complete first then
         get the kvstore and cleanup
         """
-        log.error('Cleaning up from Failure: %s' % context)
-        task = context.get('task')
-        dag_run = context.get('dag_run')
-        ti = context.get('task_instance')
+        log.error("Cleaning up from Failure: %s" % context)
+        task = context.get("task")
+        dag_run = context.get("dag_run")
+        ti = context.get("task_instance")
         max_ctr = 5
         ctr = 1
         if task._downstream_task_ids:
-            while (
-                (RayBackend.are_dependents_failed(task, dag_run) == False)
-                and
-                (ti.get_num_running_task_instances() > 0)
+            while (RayBackend.are_dependents_failed(task, dag_run) == False) and (
+                ti.get_num_running_task_instances() > 0
             ):
-                sleep_time = (2 ** ctr)
+                sleep_time = 2 ** ctr
                 sleep(sleep_time)
-                log.error('Waiting for downstream to fail')
+                log.error("Waiting for downstream to fail")
                 ctr = ctr + 1
                 if ctr == max_ctr:
-                    log.error('Max Sleep Time Reached. Consider Increasing')
+                    log.error("Max Sleep Time Reached. Consider Increasing")
                     break
 
-        log.error('Time to clean up')
+        log.error("Time to clean up")
         with FileLock("/tmp/ray_backend.lock"):
             with FileLock("/tmp/ray_kv.lock"):
-                log.debug('lock entered')
+                log.debug("lock entered")
                 handles = []
                 try:
 
                     kv_store = get_or_create_kv_store(
-                        identifier=RayBackend.store_identifier)
+                        identifier=RayBackend.store_identifier
+                    )
 
-                    actor = kv_store.get_actor(
-                        kv_store.identifier, allow_new=False)
+                    actor = kv_store.get_actor(kv_store.identifier, allow_new=False)
                     if actor is not None:
                         handles = [actor]
 
                 except Exception as e:
-                    log.error('Error getting store on cleanup %s' % e)
+                    log.error("Error getting store on cleanup %s" % e)
 
                 RayBackend.get_hook().cleanup(handles=handles)
 
     @staticmethod
     def on_success_callback(context):
-        log.info('DAG marked success, cleaning up')
-        task = context.get('task')
-        ti = context.get('task_instance')
+        log.info("DAG marked success, cleaning up")
+        task = context.get("task")
+        ti = context.get("task_instance")
 
         # If we're on the last task
         if ti.are_dependents_done():
@@ -235,15 +234,15 @@ class RayBackend(BaseXCom):
                     handles = []
                     try:
                         kv_store = get_or_create_kv_store(
-                            identifier=RayBackend.store_identifier)
+                            identifier=RayBackend.store_identifier
+                        )
 
-                        actor = kv_store.get_actor(
-                            kv_store.identifier, allow_new=False)
+                        actor = kv_store.get_actor(kv_store.identifier, allow_new=False)
                         if actor is not None:
                             handles = [actor]
 
                     except Exception as e:
-                        log.error('Error getting store on cleanup %s' % e)
+                        log.error("Error getting store on cleanup %s" % e)
 
                     RayBackend.get_hook().cleanup(handles=handles)
 
@@ -256,20 +255,14 @@ class RayBackend(BaseXCom):
         """
         session.expunge_all()
 
-        value = RayBackend.serialize_value(
-            value,
-            key,
-            task_id,
-            dag_id,
-            execution_date
-        )
+        value = RayBackend.serialize_value(value, key, task_id, dag_id, execution_date)
 
         # remove any duplicate XComs
         session.query(cls).filter(
             cls.key == key,
             cls.execution_date == execution_date,
             cls.task_id == task_id,
-            cls.dag_id == dag_id
+            cls.dag_id == dag_id,
         ).delete()
 
         session.commit()
@@ -281,7 +274,7 @@ class RayBackend(BaseXCom):
                 value=value,
                 execution_date=execution_date,
                 task_id=task_id,
-                dag_id=dag_id
+                dag_id=dag_id,
             )
         )
 
@@ -294,19 +287,16 @@ class RayBackend(BaseXCom):
         from airflow.models.dag import DAG, DagModel, DagRun
         from airflow.models.taskinstance import _CURRENT_CONTEXT
 
-        log.debug("Setting Callbacks _CURRENT_CONTEXT looks like %s" %
-                  _CURRENT_CONTEXT)
+        log.debug("Setting Callbacks _CURRENT_CONTEXT looks like %s" % _CURRENT_CONTEXT)
 
         context = _CURRENT_CONTEXT[-1]
-        dag = context.get('dag')
-        dag_run = context.get('dag_run')
+        dag = context.get("dag")
+        dag_run = context.get("dag_run")
         exec_date = func.cast(dag_run.execution_date, DateTime)
 
         DR = DagRun
 
-        dag_obj = session.query(DagModel)\
-                         .filter(DagModel.dag_id == dag._dag_id)\
-                         .one()
+        dag_obj = session.query(DagModel).filter(DagModel.dag_id == dag._dag_id).one()
 
         dr = (
             session.query(DR)
@@ -341,10 +331,11 @@ class RayBackend(BaseXCom):
         :type session: Session
         """
         from airflow.models.taskinstance import TaskInstance
-        log.info('Checking for failed dependents')
+
+        log.info("Checking for failed dependents")
 
         if not task._downstream_task_ids:
-            log.debug('not task._downstream_task_ids')
+            log.debug("not task._downstream_task_ids")
             return True
 
         exec_date = func.cast(dag_run.execution_date, DateTime)
@@ -356,5 +347,5 @@ class RayBackend(BaseXCom):
             TaskInstance.state.in_(State.failed_states),
         )
         count = ti[0][0]
-        log.debug('count is %d' % count)
+        log.debug("count is %d" % count)
         return count == len(task._downstream_task_ids)
