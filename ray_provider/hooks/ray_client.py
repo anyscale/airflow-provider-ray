@@ -1,6 +1,7 @@
 import logging
 import ray
 from airflow.hooks.http_hook import HttpHook
+
 log = logging.getLogger(__name__)
 
 
@@ -16,9 +17,7 @@ class RayClientHook(HttpHook):
     be where to use it, so we should work to understand that as well.
     """
 
-    def __init__(
-            self,
-            ray_conn_id='ray_default'):
+    def __init__(self, ray_conn_id="ray_default"):
 
         self.ray_conn_id = ray_conn_id
         self.base_url = None
@@ -64,9 +63,9 @@ class RayClientHook(HttpHook):
     def cleanup(self, handles=None):
         handles = handles or []
         for handle in handles:
-            log.info('Cleaning ray actors')
-            log.debug('Killing handle %s' % handle)
+            log.info("Cleaning ray actors")
+            log.debug("Killing handle %s" % handle)
             ray.kill(handle)
 
-        log.info('Cleaning connections')
+        log.info("Cleaning connections")
         self.disconnect()
