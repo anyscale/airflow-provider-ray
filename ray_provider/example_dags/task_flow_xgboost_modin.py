@@ -61,6 +61,7 @@ def xgboost_modin_breast_cancer():
     def create_data(data):
         if SIMPLE:
             from sklearn.model_selection import train_test_split
+
             data, labels = data
             train_x, test_x, train_y, test_y = train_test_split(
                 data, labels, test_size=0.25

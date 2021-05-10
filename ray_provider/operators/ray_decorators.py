@@ -28,7 +28,7 @@ def ray_task(
     python_callable: Optional[Callable] = None,
     ray_conn_id: str = "ray_default",
     ray_worker_pool: str = "ray_worker_pool",
-    eager: bool = False
+    eager: bool = False,
 ):
     """Wraps a function to be executed on the Ray cluster.
 
@@ -46,6 +46,7 @@ def ray_task(
             send the function to a remote task. You should
             set this to False normally.
     """
+
     @functools.wraps(python_callable)
     def wrapper(f):
 
