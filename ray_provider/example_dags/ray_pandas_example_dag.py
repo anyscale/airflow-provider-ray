@@ -3,7 +3,7 @@ from airflow.decorators import dag, task
 from airflow.utils.dates import days_ago
 from airflow.operators.dummy_operator import DummyOperator
 import ray
-from ray_provider.operators.ray_decorators import ray_task
+from ray_provider.decorators.ray_decorators import ray_task
 import numpy as np
 import pandas as pd
 from ray_provider.xcom.ray_backend import RayBackend

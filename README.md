@@ -42,11 +42,12 @@ the same.
 ## Modules
 
 - [Ray XCom Backend](./ray_provider/xcom/ray_backend.py): Custom XCom backend
-Serving to move data between tasks using the Ray API with its internal Plasma
-store, thereby allowing for in-memory distributed processing.
-- [Ray Hook](./ray_provider/hooks/ray_client.py): Extension of `Http` hooks
+to assist operators in moving data between tasks using the Ray API with its
+internal Plasma store, thereby allowing for in-memory distributed processing
+and handling of large data objects.
+- [Ray Hook](./ray_provider/hooks/ray_client.py): Extension of `Http` hook
 that uses the Ray client to provide connections to the Ray Server.
-- [Ray Decorator](./ray_provider/operators/ray_decorators.py): Task decorator
+- [Ray Decorator](./ray_provider/decorators/ray_decorators.py): Task decorator
 to be used with the task flow API, combining wrapping the existing airflow
 `@task` decorate with `ray.remote` functionality, thereby executing each
 task on the ray cluster.
@@ -59,9 +60,8 @@ task on the ray cluster.
 specify your custom backend, along with the provider wheel install. Add the following:
 
     ```Dockerfile
-    FROM quay.io/astronomer/ap-airflow:2.0.0-3-buster-onbuild
+    FROM quay.io/astronomer/ap-airflow:2.0.2-1-buster-onbuild
     USER root
-    RUN pip install airflow_provider_ray-0.1.0a0-py3-none-any.whl
     RUN pip uninstall astronomer-airflow-version-check -y
     USER astro
     ENV AIRFLOW__CORE__XCOM_BACKEND=ray_provider.xcom.ray_backend.RayBackend
@@ -73,34 +73,31 @@ specify your custom backend, along with the provider wheel install. Add the foll
 version of Ray, you can to follow this format to build the wheel url in your
 `requirements.txt` file:
 
-    ```http
-    https://s3-us-west-2.amazonaws.com/ray-wheels/master/{COMMIT_HASH}/ray-{RAY_VERSION}-{PYTHON_VERSION}-{PYTHON_VERSION}m-{OS_VERSION}_intel.whl
+    ```bash
+    pip install airflow-provider-ray==0.2.0-rc.1
     ```
 
-    For example, for linux based systems and linux containers @ commit
-    `0f9d1bb223bb1ba5edbdd557f2f2f3551a51061f` it would be:
+4. Configure Ray Locally. To run ray locally, you'll need a minimum 6GB of free
+memory.To start, in your environment with ray installed, run:
 
-    ```http
-    https://s3-us-west-2.amazonaws.com/ray-wheels/master/0f9d1bb223bb1ba5edbdd557f2f2f3551a51061f/ray-2.0.0.dev0-cp37-cp37m-manylinux2014_x86_64.whl
+    ```bash
+    (venv)$ ray start --num-cpus=8 --object-store-memory=7000000000 --head
     ```
 
-    For MacOS system, the wheel version naming goes as `macosx_10_13`, so that would
-    be:
+    If you have extra resources, you can bump the memory up.
 
-    ```http
-    https://s3-us-west-2.amazonaws.com/ray-wheels/master/0f9d1bb223bb1ba5edbdd557f2f2f3551a51061f/ray-2.0.0.dev0-cp37-cp37m-macosx_10_13_intel.whl
-    ```
+    You should now be able to open the ray dashboard at [http://127.0.0.1:8265/](http://127.0.0.1:8265/).
 
-4. Start your Airflow environment and open the UI.
+6. Start your Airflow environment and open the UI.
 
-5. In the Airflow UI, add an `Airflow Pool` with the following:
+7. In the Airflow UI, add an `Airflow Pool` with the following:
 
     ```bash
     Pool (name): ray_worker_pool
     Slots: 25
     ```
 
-6. In the Airflow UI, add an `Airflow Connection` with the following:
+8. In the Airflow UI, add an `Airflow Connection` with the following:
 
     ```bash
     Conn Id: ray_cluster_connection
@@ -109,7 +106,7 @@ version of Ray, you can to follow this format to build the wheel url in your
     Port: 10001
     ```
 
-7. In your Airflow DAG python file, you must include the following in your
+9. In your Airflow DAG python file, you must include the following in your
 `default_args` dictionary:
 
     ```python
@@ -133,16 +130,32 @@ version of Ray, you can to follow this format to build the wheel url in your
         # do stuff
     ```
 
-8. Using the taskflow API, your airflow task should now use the
-`@ray_task` decorator for any ray task, like:
+10. Using the taskflow API, your airflow task should now use the
+`@ray_task` decorator for any ray task and add the `ray_conn_id`,
+parameter as `task_args`, like:
 
     ```python
-    from ray_provider.operators.ray_decorators import ray_task
+    from ray_provider.decorators import ray_task
+
+    default_args = {
+        'on_success_callback': RayBackend.on_success_callback,
+        'on_failure_callback': RayBackend.on_failure_callback,
+        .
+        .
+        .
+    }
+    task_args = {"ray_conn_id": "ray_cluster_connection"}
     .
     .
+    .
+    @dag(
+        default_args=default_args,
+        .
+        .
+    )
     def ray_example_dag():
 
-        @ray_task(ray_conn_id='ray_cluster_connection')
+        @ray_task(**task_args)
         def sum_cols(df: pd.DataFrame) -> pd.DataFrame:
             return pd.DataFrame(df.sum()).T
     ```
@@ -158,6 +171,15 @@ with active contributions from:
 - [Daniel Imberman](https://github.com/dimberman)
 - [Rob Deeb](https://github.com/mrrobby)
 - [Richard Liaw](https://github.com/richardliaw)
+- [Charles Greer](https://github.com/grechaw)
+- [Will Drevo](https://github.com/worldveil)
+
+This project is formatted via `black`:
+
+```bash
+pip install black
+black .
+```
 
 This project is formatted via `black`:
 
