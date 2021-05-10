@@ -132,12 +132,7 @@ class KVStore:
 
 
 class RayBackend(BaseXCom):
-    """Custom Backend Serving to use Ray.
-
-    Note(rob): There is still some gRPC issues
-    and a difficult to reproduce race condition where
-    an actor seems to die.
-    """
+    """Custom Backend Serving to use Ray"""
 
     conn_id = os.getenv("ray_cluster_conn_id", "ray_cluster_connection")
     store_identifier = os.getenv("ray_store_identifier", "ray_kv_store")
