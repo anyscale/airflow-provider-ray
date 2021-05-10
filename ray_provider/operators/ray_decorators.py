@@ -26,17 +26,32 @@ def ray_wrapped(f, ray_conn_id="ray_default", eager=False):
 
 def ray_task(
     python_callable: Optional[Callable] = None,
-    ray_conn_id="ray_default",
-    multiple_outputs: bool = False,
-    ray_worker_pool="ray_worker_pool",
-    **kwargs,
+    ray_conn_id: str = "ray_default",
+    ray_worker_pool: str = "ray_worker_pool",
+    eager: bool = False,
 ):
+    """Wraps a function to be executed on the Ray cluster.
+
+    The return values of the function will be cached on the Ray object store.
+    Downstream tasks must be ray tasks too, as the dependencies will be
+    fetched from the object store.
+
+    Args:
+        python_callable (Callable): Function to be invoked on the Ray cluster.
+        ray_conn_id (str): connection string provided by user.
+        ray_worker_pool (str): The pool that controls the
+            amount of parallel clients created to access the Ray cluster.
+        eager (bool): Whether to run the the function on the
+            coordinator process (on the Ray cluster) or to
+            send the function to a remote task. You should
+            set this to False normally.
+    """
+
     @functools.wraps(python_callable)
     def wrapper(f):
 
         return task(
-            ray_wrapped(f, ray_conn_id, **kwargs),
-            multiple_outputs=multiple_outputs,
+            ray_wrapped(f, ray_conn_id, eager=eager),
             pool=ray_worker_pool,
         )
 

@@ -71,13 +71,6 @@ def xgboost_pandas_tune_breast_cancer():
     @ray_task(**task_args)
     def split_train_test(data):
         print("Splitting Data to Train and Test Sets")
-
-        logfile = open("/tmp/ray/session_latest/custom.log", "w")
-
-        def write(msg):
-            logfile.write(f"{msg}\n")
-            logfile.flush()
-
         print(f"Creating data matrix: {data, SIMPLE}")
 
         if SIMPLE:
@@ -106,12 +99,6 @@ def xgboost_pandas_tune_breast_cancer():
 
     # This could be in a library of trainables
     def train_model(config, checkpoint_dir=None, data_dir=None, data=()):
-        logfile = open("/tmp/ray/session_latest/custom.log", "w")
-
-        def write(msg):
-            logfile.write(f"{msg}\n")
-            logfile.flush()
-
         dtrain, dvalidation = data
         evallist = [(dvalidation, "eval")]
         # evals_result = {}
@@ -131,11 +118,6 @@ def xgboost_pandas_tune_breast_cancer():
 
     @ray_task(**task_args)
     def tune_model(data):
-        logfile = open("/tmp/ray/session_latest/custom.log", "w")
-
-        def write(msg):
-            logfile.write(f"{msg}\n")
-            logfile.flush()
 
         search_space = {
             # You can mix constants with search space objects.
@@ -173,12 +155,6 @@ def xgboost_pandas_tune_breast_cancer():
 
     @ray_task(**task_args)
     def load_best_model_checkpoint(analysis):
-        logfile = open("/tmp/ray/session_latest/custom.log", "w")
-
-        def write(msg):
-            logfile.write(f"{msg}\n")
-            logfile.flush()
-
         print("Checking Analysis")
 
         best_bst = xgb.Booster()
