@@ -159,6 +159,13 @@ with active contributions from:
 - [Rob Deeb](https://github.com/mrrobby)
 - [Richard Liaw](https://github.com/richardliaw)
 
+This project is formatted via `black`:
+
+```
+pip install black
+black .
+```
+
 ## Connections
 
 TBD - [Info on building a connection to Ray]

@@ -17,9 +17,9 @@ from datetime import datetime
 # These args will get passed on to each operator
 # You can override them on a per-task basis during operator initialization
 default_args = {
-    'owner': 'airflow',
-    'on_success_callback': RayBackend.on_success_callback,
-    'on_failure_callback': RayBackend.on_failure_callback
+    "owner": "airflow",
+    "on_success_callback": RayBackend.on_success_callback,
+    "on_failure_callback": RayBackend.on_failure_callback,
 }
 
 task_args = {"ray_conn_id": "ray_cluster_connection"}
@@ -28,13 +28,18 @@ task_args = {"ray_conn_id": "ray_cluster_connection"}
 SIMPLE = False
 
 # Change actors and cpus per actor here as per resources allow
-XGB_RAY_PARAMS = xgbr.RayParams(
-    max_actor_restarts=1, num_actors=1, cpus_per_actor=1)
+XGB_RAY_PARAMS = xgbr.RayParams(max_actor_restarts=1, num_actors=1, cpus_per_actor=1)
 
-ROOT_DIR = '.'
-LOCAL_DIR = f'{ROOT_DIR}/ray_results'
+ROOT_DIR = "."
+LOCAL_DIR = f"{ROOT_DIR}/ray_results"
 
-@dag(default_args=default_args, schedule_interval=None, start_date=datetime(2021, 1, 1, 0, 0, 0), tags=['xgboost-pandas-tune'])
+
+@dag(
+    default_args=default_args,
+    schedule_interval=None,
+    start_date=datetime(2021, 1, 1, 0, 0, 0),
+    tags=["xgboost-pandas-tune"],
+)
 def xgboost_pandas_tune_breast_cancer():
     @ray_task(**task_args)
     def load_dataframe() -> "ray.ObjectRef":
@@ -46,14 +51,18 @@ def xgboost_pandas_tune_breast_cancer():
         if SIMPLE:
             print("Loading simple from sklearn.datasets")
             from sklearn import datasets
+
             data = datasets.load_breast_cancer(return_X_y=True)
         else:
             import pandas as pd
-            url = "https://archive.ics.uci.edu/ml/machine-learning-databases/" \
+
+            url = (
+                "https://archive.ics.uci.edu/ml/machine-learning-databases/"
                 "00280/HIGGS.csv.gz"
+            )
 
             colnames = ["label"] + ["feature-%02d" % i for i in range(1, 29)]
-            data = pd.read_csv(url, compression='gzip', names=colnames)
+            data = pd.read_csv(url, compression="gzip", names=colnames)
             print("loaded higgs")
         print("Loaded CSV.")
 
@@ -73,20 +82,22 @@ def xgboost_pandas_tune_breast_cancer():
 
         if SIMPLE:
             from sklearn.model_selection import train_test_split
+
             print("Splitting data")
             data, labels = data
             train_x, test_x, train_y, test_y = train_test_split(
-                data, labels, test_size=0.25)
+                data, labels, test_size=0.25
+            )
 
             train_set = xgbr.RayDMatrix(train_x, train_y)
             test_set = xgbr.RayDMatrix(test_x, test_y)
         else:
-            df_train = data[(data['feature-01'] < 0.4)]
+            df_train = data[(data["feature-01"] < 0.4)]
             colnames = ["label"] + ["feature-%02d" % i for i in range(1, 29)]
-            train_set = xgbr.RayDMatrix(
-                df_train, label="label", columns=colnames)
-            df_validation = data[(data['feature-01'] >= 0.4)
-                                 & (data['feature-01'] < 0.8)]
+            train_set = xgbr.RayDMatrix(df_train, label="label", columns=colnames)
+            df_validation = data[
+                (data["feature-01"] >= 0.4) & (data["feature-01"] < 0.8)
+            ]
             test_set = xgbr.RayDMatrix(df_validation, label="label")
 
         print("finished data matrix")
@@ -94,12 +105,7 @@ def xgboost_pandas_tune_breast_cancer():
         return train_set, test_set
 
     # This could be in a library of trainables
-    def train_model(
-        config,
-        checkpoint_dir=None,
-        data_dir=None,
-        data=()
-    ):
+    def train_model(config, checkpoint_dir=None, data_dir=None, data=()):
         logfile = open("/tmp/ray/session_latest/custom.log", "w")
 
         def write(msg):
@@ -107,7 +113,7 @@ def xgboost_pandas_tune_breast_cancer():
             logfile.flush()
 
         dtrain, dvalidation = data
-        evallist = [(dvalidation, 'eval')]
+        evallist = [(dvalidation, "eval")]
         # evals_result = {}
         config = {
             "tree_method": "hist",
@@ -120,7 +126,8 @@ def xgboost_pandas_tune_breast_cancer():
             ray_params=XGB_RAY_PARAMS,
             num_boost_round=100,
             evals=evallist,
-            callbacks=[TuneReportCheckpointCallback(filename=f"model.xgb")])
+            callbacks=[TuneReportCheckpointCallback(filename=f"model.xgb")],
+        )
 
     @ray_task(**task_args)
     def tune_model(data):
@@ -137,23 +144,19 @@ def xgboost_pandas_tune_breast_cancer():
             "max_depth": tune.randint(1, 9),
             "min_child_weight": tune.choice([1, 2, 3]),
             "subsample": tune.uniform(0.5, 1.0),
-            "eta": tune.loguniform(1e-4, 1e-1)
+            "eta": tune.loguniform(1e-4, 1e-1),
         }
 
         print("enabling aggressive early stopping of bad trials")
         # This will enable aggressive early stopping of bad trials.
         scheduler = ASHAScheduler(
-            max_t=4,  # 4 training iterations
-            grace_period=1,
-            reduction_factor=2)
+            max_t=4, grace_period=1, reduction_factor=2  # 4 training iterations
+        )
 
         print("Tuning")
 
         analysis = tune.run(
-            tune.with_parameters(
-                train_model,
-                data=data
-            ),
+            tune.with_parameters(train_model, data=data),
             metric="eval-logloss",
             mode="min",
             local_dir=LOCAL_DIR,
@@ -161,7 +164,8 @@ def xgboost_pandas_tune_breast_cancer():
             resources_per_trial=XGB_RAY_PARAMS.get_tune_resources(),
             config=search_space,
             num_samples=4,
-            scheduler=scheduler)
+            scheduler=scheduler,
+        )
 
         print("Done Tuning")
 
@@ -179,12 +183,13 @@ def xgboost_pandas_tune_breast_cancer():
 
         best_bst = xgb.Booster()
 
-        print(f"Analysis Best Result on eval-error is: {analysis.best_result['eval-error']}")
+        print(
+            f"Analysis Best Result on eval-error is: {analysis.best_result['eval-error']}"
+        )
         print("Loading Model with Best Params")
 
-        best_bst.load_model(os.path.join(
-            analysis.best_checkpoint, "model.xgb"))
-        accuracy = 1. - analysis.best_result["eval-error"]
+        best_bst.load_model(os.path.join(analysis.best_checkpoint, "model.xgb"))
+        accuracy = 1.0 - analysis.best_result["eval-error"]
 
         print(f"Best model parameters: {analysis.best_config}")
         print(f"Best model total accuracy: {accuracy:.4f}")
@@ -198,10 +203,11 @@ def xgboost_pandas_tune_breast_cancer():
     analysis = tune_model(data)
     best_checkpoint = load_best_model_checkpoint(analysis)
 
-    kickoff_dag = DummyOperator(task_id='kickoff_dag')
-    complete_dag = DummyOperator(task_id='complete_dag')
+    kickoff_dag = DummyOperator(task_id="kickoff_dag")
+    complete_dag = DummyOperator(task_id="complete_dag")
 
     kickoff_dag >> build_raw_df
     best_checkpoint >> complete_dag
+
 
 xgboost_pandas_tune_breast_cancer = xgboost_pandas_tune_breast_cancer()
