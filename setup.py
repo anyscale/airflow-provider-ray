@@ -16,7 +16,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     license="Apache License 2.0",
-    version="0.2.0.rc1",
+    version="0.2.0-rc.1",
     packages=find_packages(include=["*"]),
     zip_safe=False,
     install_requires=["apache-airflow>=2.0", "pandas>=1.0.0", "filelock>=3.0.0", "ray"],
