@@ -6,15 +6,10 @@ log = logging.getLogger(__name__)
 
 
 class RayClientHook(HttpHook):
-    """
-    Extending the HttpHook for now to demoonstrate the pattern using
-    an http connection. When we build this into the provider package
-    we can create the ray connection type and likely just use the
-    BaseHook here. It would be important to understand the differences
-    between ray.init() and using the client, as well as allocation of
-    resources here vs per task. Also, currently there isn't much usefule
-    returned from ray.util.connect() but if there could be, here would
-    be where to use it, so we should work to understand that as well.
+    """A Connection Hook for accessing Ray via the Ray Client.
+
+    Extending the HttpHook for now to demonstrate the pattern using
+    an http connection.
     """
 
     def __init__(self, ray_conn_id="ray_default"):
@@ -25,7 +20,8 @@ class RayClientHook(HttpHook):
         self.num_gpus = None
         self.resources = {}
 
-    def get_conn(self):
+    def get_conn(self) -> str:
+        """Returns a connection string."""
         if self.ray_conn_id:
             conn = self.get_connection(self.ray_conn_id)
 
@@ -47,6 +43,10 @@ class RayClientHook(HttpHook):
             conn = self.get_conn()
 
         log.info("Connection base_url is %s" % self.base_url)
+        # currently there isn't much useful info
+        # returned from ray.util.connect(),
+        # but if there could be, here would be where to use it,
+        # so we should work to understand that as well.
         if not ray.util.client.ray.is_connected():
             ray.util.connect(self.base_url)
             log.info("New Ray Connection Established")
@@ -56,11 +56,11 @@ class RayClientHook(HttpHook):
     def disconnect(self):
         if self.base_url is None:
             conn = self.get_conn()
-
         ray.util.disconnect()
 
     # TODO: Create LocationTypes and persist data to S3 or GCS
     def cleanup(self, handles=None):
+        """Kills any handles to any actors forcibly and disconnects Ray."""
         handles = handles or []
         for handle in handles:
             log.info("Cleaning ray actors")

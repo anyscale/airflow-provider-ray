@@ -44,15 +44,10 @@ def xgboost_modin_breast_cancer():
 
             data = datasets.load_breast_cancer(return_X_y=True)
         else:
-            # import pandas as pd
-
             url = (
                 "https://archive.ics.uci.edu/ml/machine-learning-databases/"
                 "00280/HIGGS.csv.gz"
             )
-            # colnames = ["label"] + ["feature-%02d" % i for i in range(1, 29)]
-            # data = pd.read_csv(url, compression='gzip', names=colnames)
-
             import modin.pandas as mpd
 
             colnames = ["label"] + ["feature-%02d" % i for i in range(1, 29)]
@@ -64,18 +59,9 @@ def xgboost_modin_breast_cancer():
 
     @ray_task(**task_args)
     def create_data(data):
-        print("RUNNING SOME CODE!")
-        logfile = open("/tmp/ray/session_latest/custom.log", "w")
-
-        def write(msg):
-            logfile.write(f"{msg}\n")
-            logfile.flush()
-
-        write(f"Creating data matrix: {data, SIMPLE}")
         if SIMPLE:
             from sklearn.model_selection import train_test_split
 
-            write("Splitting data")
             data, labels = data
             train_x, test_x, train_y, test_y = train_test_split(
                 data, labels, test_size=0.25
@@ -91,17 +77,10 @@ def xgboost_modin_breast_cancer():
                 (data["feature-01"] >= 0.4) & (data["feature-01"] < 0.8)
             ]
             test_set = xgb.RayDMatrix(df_validation, label="label")
-        write("finished data matrix")
         return train_set, test_set
 
     @ray_task(**task_args)
     def train_model(data) -> None:
-        logfile = open("/tmp/ray/session_latest/custom.log", "w")
-
-        def write(msg):
-            logfile.write(f"{msg}\n")
-            logfile.flush()
-
         dtrain, dvalidation = data
         evallist = [(dvalidation, "eval")]
         evals_result = {}
@@ -109,7 +88,6 @@ def xgboost_modin_breast_cancer():
             "tree_method": "hist",
             "eval_metric": ["logloss", "error"],
         }
-        write("Start training")
         bst = xgb.train(
             params=config,
             dtrain=dtrain,
@@ -120,7 +98,6 @@ def xgboost_modin_breast_cancer():
             num_boost_round=100,
             evals=evallist,
         )
-        write("finish training")
         return bst
 
     build_raw_df = load_dataframe()
