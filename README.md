@@ -33,7 +33,7 @@ for more info on Ray.
 the same.
 
 ```yaml
-- Python Version == 3.7
+- Python Version >= 3.7
 - Airflow Version >= 2.0.0
 - Ray Version == 1.3.0
 - Filelock >= 3.0.0
@@ -74,7 +74,7 @@ version of Ray, you can to follow this format to build the wheel url in your
 `requirements.txt` file:
 
     ```bash
-    pip install airflow-provider-ray==0.2.0-rc.1
+    pip install airflow-provider-ray
     ```
 
 4. Configure Ray Locally. To run ray locally, you'll need a minimum 6GB of free
