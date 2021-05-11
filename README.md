@@ -33,7 +33,7 @@ for more info on Ray.
 the same.
 
 ```yaml
-- Python Version >= 3.6
+- Python Version >= 3.7
 - Airflow Version >= 2.0.0
 - Ray Version == 1.3.0
 - Filelock >= 3.0.0

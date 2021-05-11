@@ -27,6 +27,6 @@ setup(
     maintainer="Rob Deeb, Richard Liaw, Daniel Imberman, Pete DeJoy",
     maintainer_email="rob@astronomer.io, daniel@astronomer.io, rliaw@anyscale.com, pete@astronomer.io",
     keywords=["ray", "distributed", "compute", "airflow"],
-    python_requires=">=3.6",
+    python_requires=">=3.7",
     include_package_data=True,
 )
