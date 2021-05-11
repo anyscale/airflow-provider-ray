@@ -50,7 +50,7 @@ def ray_task(
             return pd.DataFrame(df.sum()).T
 
     :param python_callable: Function to be invoked on the Ray cluster.
-    :type python_callable: func
+    :type python_callable: Optional[Callable]
     :param http_conn_id: Http connection id for conenction to ray.
     :type http_conn_id: str
     :param ray_worker_pool: The pool that controls the
