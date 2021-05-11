@@ -10,6 +10,9 @@ class RayClientHook(HttpHook):
 
     Extending the HttpHook for now to demonstrate the pattern using
     an http connection.
+
+    :param http_conn_id: The http connection id used to connect to Ray.
+    :type http_conn_id: str
     """
 
     def __init__(self, ray_conn_id="ray_default"):

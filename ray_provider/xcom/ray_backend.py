@@ -51,16 +51,19 @@ class KVStore:
 
             TODO: allow resource access.
 
-            Args:
-                fn: function to be executed, either on this actor or
-                    in a separate remote task.
-                args: function args.
-                kwargs: function kwargs.
-                eager (bool): This value gets past the Ray ownership model
+            :param fn: function to be executed, either on this actor or
+                in a separate remote task.
+            :type fn: func
+            :parm args: function args.
+            :type args: any
+            :param kwargs: function kwargs.
+            :type kwargs: obj
+            :param eager: This value gets past the Ray ownership model
                     by allowing users to selectively execute tasks
                     directly on the metadata store actor.
                     this means that created objects like Modin Dataframes
                     will not be GC'ed upon task completion.
+            :type eager: bool
             """
             ray_args = [self.get(a) for a in args]
             ray_kwargs = {k: self.get(v) for k, v in kwargs.items()}
@@ -98,10 +101,11 @@ class KVStore:
     def get_actor(self, identifier, allow_new):
         """Creates the executor actor.
 
-        Args:
-            identifier (str): Uniquely identifies the DAG.
-            allow_new (bool): whether to create a new actor if the actor
-                doesn't exist.
+        :param identifier: Uniquely identifies the DAG.
+        :type identifier: str
+        :param allow_new: whether to create a new actor if the actor
+            doesn't exist.
+        :type allow_new: bool
         """
         try:
             log.debug(f"trying to get this actor {identifier} here")
@@ -132,7 +136,19 @@ class KVStore:
 
 
 class RayBackend(BaseXCom):
-    """Custom Backend Serving to use Ray"""
+    """
+    Custom Backend Serving to use Ray.
+    
+    Setup in your airflow Dockerfile with the following lines:
+
+    .. code-block::
+
+    FROM quay.io/astronomer/ap-airflow:2.0.2-1-buster-onbuild
+    USER root
+    RUN pip uninstall astronomer-airflow-version-check -y
+    USER astro
+    ENV AIRFLOW__CORE__XCOM_BACKEND=ray_provider.xcom.ray_backend.RayBackend
+    """
 
     conn_id = os.getenv("ray_cluster_conn_id", "ray_cluster_connection")
     store_identifier = os.getenv("ray_store_identifier", "ray_kv_store")
@@ -305,6 +321,7 @@ class RayBackend(BaseXCom):
         This is meant to be used to wait for cleanup.
         This is useful when you want to delete references but wait until
         other tasks finish.
+        
         :param session: SQLAlchemy ORM Session
         :type session: Session
         """
