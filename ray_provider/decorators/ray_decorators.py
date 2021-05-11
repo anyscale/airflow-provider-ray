@@ -35,7 +35,7 @@ def ray_task(
     The return values of the function will be cached on the Ray object store.
     Downstream tasks must be ray tasks too, as the dependencies will be
     fetched from the object store. The RayBackend will need to be setup in your
-    Dockerfile to use this decorator. 
+    Dockerfile to use this decorator.
 
     Use as a task decorator:
 
