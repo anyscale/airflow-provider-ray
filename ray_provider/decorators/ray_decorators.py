@@ -34,17 +34,33 @@ def ray_task(
 
     The return values of the function will be cached on the Ray object store.
     Downstream tasks must be ray tasks too, as the dependencies will be
-    fetched from the object store.
+    fetched from the object store. The RayBackend will need to be setup in your
+    Dockerfile to use this decorator. 
 
-    Args:
-        python_callable (Callable): Function to be invoked on the Ray cluster.
-        ray_conn_id (str): connection string provided by user.
-        ray_worker_pool (str): The pool that controls the
+    Use as a task decorator:
+
+    .. code-block::
+
+    from ray_provider.decorators import ray_task
+
+    def ray_example_dag():
+
+        @ray_task("ray_conn_id")
+        def sum_cols(df: pd.DataFrame) -> pd.DataFrame:
+            return pd.DataFrame(df.sum()).T
+
+    :param python_callable: Function to be invoked on the Ray cluster.
+    :type python_callable: func
+    :param http_conn_id: Http connection id for conenction to ray.
+    :type http_conn_id: str
+    :param ray_worker_pool: The pool that controls the
             amount of parallel clients created to access the Ray cluster.
-        eager (bool): Whether to run the the function on the
+    :type ray_worker_pool: str
+    :param eager: Whether to run the the function on the
             coordinator process (on the Ray cluster) or to
             send the function to a remote task. You should
             set this to False normally.
+    :type eager: bool
     """
 
     @functools.wraps(python_callable)
