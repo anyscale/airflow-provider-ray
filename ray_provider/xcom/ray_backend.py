@@ -325,7 +325,7 @@ class RayBackend(BaseXCom):
         This is meant to be used to wait for cleanup.
         This is useful when you want to delete references but wait until
         other tasks finish.
-
+        
         :param session: SQLAlchemy ORM Session
         :type session: Session
         """
