@@ -4,6 +4,7 @@ import os
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
+VERSION = os.environ.get("RAY_PROVIDER_VERSION", "0.2.0")
 
 setup(
     name="airflow-provider-ray",
@@ -16,7 +17,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     license="Apache License 2.0",
-    version="0.2.0-rc.1",
+    version=VERSION,
     packages=find_packages(include=["*"]),
     zip_safe=False,
     install_requires=["apache-airflow>=2.0", "pandas>=1.0.0", "filelock>=3.0.0", "ray"],
