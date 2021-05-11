@@ -4,7 +4,7 @@ import os
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-VERSION = os.environ.get("RAY_PROVIDER_VERSION", "0.2.0")
+VERSION = os.environ.get("RAY_PROVIDER_VERSION", "0.2.1")
 
 setup(
     name="airflow-provider-ray",
