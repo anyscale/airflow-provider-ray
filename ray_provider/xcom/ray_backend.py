@@ -139,9 +139,7 @@ class RayBackend(BaseXCom):
     """
     Custom Backend Serving to use Ray.
 
-    Setup in your airflow Dockerfile with the following lines:
-
-    .. code-block:: python
+    Setup in your airflow Dockerfile with the following lines: ::
 
         FROM quay.io/astronomer/ap-airflow:2.0.2-1-buster-onbuild
         USER root

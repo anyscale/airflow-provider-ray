@@ -37,9 +37,7 @@ def ray_task(
     fetched from the object store. The RayBackend will need to be setup in your
     Dockerfile to use this decorator.
 
-    Use as a task decorator:
-
-    .. code-block:: python
+    Use as a task decorator: ::
 
         from ray_provider.decorators import ray_task
 
