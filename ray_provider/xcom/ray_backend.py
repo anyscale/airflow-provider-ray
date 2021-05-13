@@ -139,15 +139,13 @@ class RayBackend(BaseXCom):
     """
     Custom Backend Serving to use Ray.
 
-    Setup in your airflow Dockerfile with the following lines:
+    Setup in your airflow Dockerfile with the following lines: ::
 
-    .. code-block::
-
-    FROM quay.io/astronomer/ap-airflow:2.0.2-1-buster-onbuild
-    USER root
-    RUN pip uninstall astronomer-airflow-version-check -y
-    USER astro
-    ENV AIRFLOW__CORE__XCOM_BACKEND=ray_provider.xcom.ray_backend.RayBackend
+        FROM quay.io/astronomer/ap-airflow:2.0.2-1-buster-onbuild
+        USER root
+        RUN pip uninstall astronomer-airflow-version-check -y
+        USER astro
+        ENV AIRFLOW__CORE__XCOM_BACKEND=ray_provider.xcom.ray_backend.RayBackend
     """
 
     conn_id = os.getenv("ray_cluster_conn_id", "ray_cluster_connection")

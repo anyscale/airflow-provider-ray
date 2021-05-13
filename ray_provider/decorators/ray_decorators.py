@@ -37,17 +37,15 @@ def ray_task(
     fetched from the object store. The RayBackend will need to be setup in your
     Dockerfile to use this decorator.
 
-    Use as a task decorator:
+    Use as a task decorator: ::
 
-    .. code-block::
+        from ray_provider.decorators import ray_task
 
-    from ray_provider.decorators import ray_task
+        def ray_example_dag():
 
-    def ray_example_dag():
-
-        @ray_task("ray_conn_id")
-        def sum_cols(df: pd.DataFrame) -> pd.DataFrame:
-            return pd.DataFrame(df.sum()).T
+            @ray_task("ray_conn_id")
+            def sum_cols(df: pd.DataFrame) -> pd.DataFrame:
+                return pd.DataFrame(df.sum()).T
 
     :param python_callable: Function to be invoked on the Ray cluster.
     :type python_callable: Optional[Callable]
