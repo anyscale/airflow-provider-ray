@@ -150,6 +150,9 @@ class RayBackend(BaseXCom):
 
     conn_id = os.getenv("ray_cluster_conn_id", "ray_cluster_connection")
     store_identifier = os.getenv("ray_store_identifier", "ray_kv_store")
+    persist_bucket_conn_id = os.getenv("persist_bucket_conn_id", "persist_bucket_default_conn")
+    persist_bucket_name = os.getenv("persist_bucket_name", "default-persist-bucket")
+
 
     @staticmethod
     def get_hook():
@@ -158,6 +161,12 @@ class RayBackend(BaseXCom):
     @staticmethod
     def generate_object_key(key, task_id, dag_id):
         return f"{key}_{task_id}_{dag_id}"
+
+    ###NEW 
+    @staticmethod
+    def get_persistence_keypath(dag_id, task_id, execution_date):
+        return f"ray_store/{execution_date}/{dag_id}/{task_id}"
+    ###END NEW
 
     @staticmethod
     def serialize_value(value, key, task_id, dag_id, execution_date):
@@ -192,6 +201,26 @@ class RayBackend(BaseXCom):
                 if ctr == max_ctr:
                     log.error("Max Sleep Time Reached. Consider Increasing")
                     break
+
+        ###NEW - TODO: REMOVE HARDCODING - The first 2 values will all
+        ### come from the connection set in the UI
+        log.error("Backing Up")
+        with FileLock("/tmp/ray_backend.lock"):
+            with FileLock("/tmp/ray_kv.lock"):
+
+                keypath = RayBackend.get_persistence_keypath(
+                    dag_run.dag_id,
+                    ti.task_id,
+                    dag_run.execution_date
+                )
+
+                # TODO: Use Ray Conn Id and derive from that maybe
+                completed = persist_kvstore(
+                    RayBackend.persist_bucket_conn_id,
+                    RayBackend.persist_bucket_name,
+                    keypath
+                )
+        ## END NEW
 
         log.error("Time to clean up")
         with FileLock("/tmp/ray_backend.lock"):
@@ -237,6 +266,43 @@ class RayBackend(BaseXCom):
                         log.error("Error getting store on cleanup %s" % e)
 
                     RayBackend.get_hook().cleanup(handles=handles)
+
+    @staticmethod
+    def persist_kvstore(gcs_conn_id, gcs_bucket, keypath):
+
+        def persist_gcs(gcs_conn_id, gcs_bucket, keypath, data):
+            from airflow.providers.google.cloud.hooks.gcs import GoogleCloudStorageHook
+            import json
+
+            identifier = kv_store.identifier
+            output = json.dumps(data).encode('utf-8')
+            gcs = GoogleCloudStorageHook(gcs_conn_id)
+
+            with NamedTemporaryFile('w') as tmp:
+                tmp.write(output)
+                tmp.flush()
+                gcs.upload(
+                    bucket=gcs_bucket,
+                    object=keypath,
+                    filename=tmp.name
+                )
+                log.info("Persisted to %s" % tmp.name)
+                return tmp.name
+
+        ray_store = get_or_create_kv_store(
+            identifier=RayBackend.store_identifier
+        )
+
+        data = ray_store.data
+        ret_str = None
+
+        if data:
+            ret_str = ray_store.execute(persist_gcs,
+                args=(gcs_conn_id, gcs_bucket, keypath, data))
+        else:
+            log.info("No Data to Persist")
+
+        return ret_str
 
     @classmethod
     @provide_session
