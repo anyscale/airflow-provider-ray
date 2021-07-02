@@ -45,13 +45,17 @@ class RayClientHook(HttpHook):
         if self.base_url is None:
             conn = self.get_conn()
 
-        log.info("Connection base_url is %s" % self.base_url)
+        log.info(f"Connection base_url is {self.base_url}")
+        log.info(f"Ray version is {ray.__version__}")
         # currently there isn't much useful info
         # returned from ray.util.connect(),
         # but if there could be, here would be where to use it,
         # so we should work to understand that as well.
         if not ray.util.client.ray.is_connected():
-            ray.util.connect(self.base_url)
+            if ray.__version__ == "1.4.0":
+                ray.client(self.base_url).namespace("airflow").connect()  # let's see if this changes things
+            else:
+                ray.util.connect(self.base_url)
             log.info("New Ray Connection Established")
         else:
             log.info("Reusing Existing Ray Connections")
