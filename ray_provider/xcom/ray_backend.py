@@ -115,7 +115,7 @@ class KVStore:
         except ValueError as e:
             log.info(e)
             if allow_new:
-                log.info(f"No problem.  Creating new Actor with identifier {identifier}"
+                log.info(f"No problem.  Creating new Actor with identifier {identifier}")
                 return self._create_new_actor(identifier)
             else:
                 raise

@@ -28,7 +28,7 @@ class RayClientHook(HttpHook):
         if self.ray_conn_id:
             conn = self.get_connection(self.ray_conn_id)
 
-        if conn.host and "://" in conn.host and self.schema:
+        if conn.host and "://" in conn.host and conn.schema:
             # schema defaults to HTTP
             schema = conn.schema if conn.schema else "http"
             host = conn.host if conn.host else ""
