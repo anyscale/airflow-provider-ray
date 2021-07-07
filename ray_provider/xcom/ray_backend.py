@@ -11,6 +11,7 @@ from sqlalchemy import func, DateTime
 import ray
 from ray import ObjectRef as RayObjectRef
 from ray_provider.hooks.ray_client import RayClientHook
+from tempfile import NamedTemporaryFile
 
 log = logging.getLogger(__name__)
 
@@ -31,9 +32,9 @@ def get_or_create_kv_store(identifier, allow_new=False):
 
 
 def persist_gcs(gcs_conn_id, gcs_bucket, keypath, blob):
-    from airflow.providers.google.cloud.hooks.gcs import GoogleCloudStorageHook
+    from airflow.providers.google.cloud.hooks.gcs import GCSHook
     try:
-        gcs = GoogleCloudStorageHook(gcs_conn_id)
+        gcs = GCSHook(gcs_conn_id)
 
         with NamedTemporaryFile('w') as tmp:
             print("Writing")
@@ -41,11 +42,11 @@ def persist_gcs(gcs_conn_id, gcs_bucket, keypath, blob):
             print("Flushing")
             tmp.flush()
             print("Uploading")
-            gcs.upload(
-                bucket=gcs_bucket,
-                object=keypath,
-                filename=tmp.name
-            )
+            # gcs.upload(
+            #     bucket=gcs_bucket,
+            #     object=keypath,
+            #     filename=tmp.name
+            # )
             print("Persisted to %s" % tmp.name)
             return tmp.name
     except Exception as e:

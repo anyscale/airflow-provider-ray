@@ -2,9 +2,12 @@ import logging
 import functools
 from typing import Callable, Optional
 import ray
-from airflow.operators.python import task
+from airflow.decorators.python import python_task
+from airflow.operators.python import PythonOperator
+from airflow.decorators.base import DecoratedOperator, task_decorator_factory
 from ray_provider.hooks.ray_client import RayClientHook
 from ray_provider.xcom.ray_backend import RayBackend, get_or_create_kv_store
+from typing import Callable, Optional, TypeVar
 
 log = logging.getLogger(__name__)
 
@@ -24,11 +27,75 @@ def ray_wrapped(f, ray_conn_id="ray_default", eager=False):
     return wrapper
 
 
+class _RayDecoratedOperator(DecoratedOperator, PythonOperator):
+    """
+    Wraps a Python callable and captures args/kwargs when called for execution.
+
+    :param python_callable: A reference to an object that is callable
+    :type python_callable: python callable
+    :param op_kwargs: a dictionary of keyword arguments that will get unpacked
+        in your function (templated)
+    :type op_kwargs: dict
+    :param op_args: a list of positional arguments that will get unpacked when
+        calling your callable (templated)
+    :type op_args: list
+    :param multiple_outputs: if set, function return value will be
+        unrolled to multiple XCom values. Dict will unroll to xcom values with keys as keys.
+        Defaults to False.
+    :type multiple_outputs: bool
+    """
+
+    template_fields = ('op_args', 'op_kwargs')
+    template_fields_renderers = {"op_args": "py", "op_kwargs": "py"}
+
+    # since we won't mutate the arguments, we should just do the shallow copy
+    # there are some cases we can't deepcopy the objects (e.g protobuf).
+    shallow_copy_attrs = ('python_callable',)
+
+    def __init__(
+            self,
+            **kwargs,
+    ) -> None:
+        kwargs_to_upstream = {
+            "python_callable": kwargs["python_callable"],
+            "op_args": kwargs["op_args"],
+            "op_kwargs": kwargs["op_kwargs"],
+        }
+
+        super().__init__(kwargs_to_upstream=kwargs_to_upstream, **kwargs)
+
+
+T = TypeVar("T", bound=Callable)  # pylint: disable=invalid-name
+
+
+def _ray_task(
+        python_callable: Optional[Callable] = None, multiple_outputs: Optional[bool] = None, **kwargs
+):
+    """
+    Python operator decorator. Wraps a function into an Airflow operator.
+    Accepts kwargs for operator kwarg. Can be reused in a single DAG.
+
+    :param python_callable: Function to decorate
+    :type python_callable: Optional[Callable]
+    :param multiple_outputs: if set, function return value will be
+        unrolled to multiple XCom values. List/Tuples will unroll to xcom values
+        with index as key. Dict will unroll to xcom values with keys as XCom keys.
+        Defaults to False.
+    :type multiple_outputs: bool
+    """
+    return task_decorator_factory(
+        python_callable=python_callable,
+        multiple_outputs=multiple_outputs,
+        decorated_operator_class=_RayDecoratedOperator,
+        **kwargs,
+    )
+
+
 def ray_task(
-    python_callable: Optional[Callable] = None,
-    ray_conn_id: str = "ray_default",
-    ray_worker_pool: str = "ray_worker_pool",
-    eager: bool = False,
+        python_callable: Optional[Callable] = None,
+        ray_conn_id: str = "ray_default",
+        ray_worker_pool: str = "ray_worker_pool",
+        eager: bool = False,
 ):
     """Wraps a function to be executed on the Ray cluster.
 
@@ -63,10 +130,15 @@ def ray_task(
 
     @functools.wraps(python_callable)
     def wrapper(f):
+        def pre_execute():
+            pass
 
-        return task(
+        ray_task = _ray_task(
             ray_wrapped(f, ray_conn_id, eager=eager),
             pool=ray_worker_pool,
         )
+        ray_task.pre_execute = pre_execute
+
+        return ray_task
 
     return wrapper
