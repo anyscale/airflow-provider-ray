@@ -4,3 +4,4 @@ numpy
 pandas==1.2.4
 modin
 xgboost_ray
+apache-airflow-providers-google
