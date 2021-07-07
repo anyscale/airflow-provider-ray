@@ -30,6 +30,28 @@ def get_or_create_kv_store(identifier, allow_new=False):
     return _KVStore
 
 
+def persist_gcs(gcs_conn_id, gcs_bucket, keypath, blob):
+    from airflow.providers.google.cloud.hooks.gcs import GoogleCloudStorageHook
+    try:
+        gcs = GoogleCloudStorageHook(gcs_conn_id)
+
+        with NamedTemporaryFile('w') as tmp:
+            print("Writing")
+            tmp.write(blob)
+            print("Flushing")
+            tmp.flush()
+            print("Uploading")
+            gcs.upload(
+                bucket=gcs_bucket,
+                object=keypath,
+                filename=tmp.name
+            )
+            print("Persisted to %s" % tmp.name)
+            return tmp.name
+    except Exception as e:
+        print("Error thrown peristing %s" % e)
+
+
 class KVStore:
     @ray.remote
     class _KvStoreActor(object):
@@ -91,6 +113,17 @@ class KVStore:
             self.put(str(result), result)
             return str(result)
 
+        def persist(self, gcs_conn_id, gcs_bucket, keypath):
+            print("Serializing")
+            import pickle
+            blob = pickle.dumps(self.store)
+            print("Serialized")
+            return persist_gcs(gcs_conn_id, gcs_bucket, keypath, blob)
+
+        def load_state(self):
+            pass
+
+
     def __init__(self, identifier, backend_cls=None, allow_new=False):
         backend_cls = backend_cls or RayBackend
         hook = backend_cls.get_hook()
@@ -120,9 +153,6 @@ class KVStore:
             else:
                 raise
 
-    def get_store(self, identifier):
-        return self.get_actor(identifier, allow_new=False).store
-
     def _create_new_actor(self, identifier):
         self.is_new = True
         return self._KvStoreActor.options(name=identifier, lifetime="detached").remote()
@@ -136,6 +166,10 @@ class KVStore:
                 fn=fn, args=args, kwargs=kwargs, eager=eager
             )
             return ray.get(res)
+
+    def persist(self, gcs_conn_id, gcs_bucket, keypath):
+        return ray.get(self.actor.persist.remote(gcs_conn_id, gcs_bucket, keypath))
+
 
 
 class RayBackend(BaseXCom):
@@ -165,7 +199,7 @@ class RayBackend(BaseXCom):
     def generate_object_key(key, task_id, dag_id):
         return f"{key}_{task_id}_{dag_id}"
 
-    ###NEW 
+    ###NEW
     @staticmethod
     def get_persistence_keypath(dag_id, task_id, execution_date):
         return (
@@ -284,51 +318,11 @@ class RayBackend(BaseXCom):
     @staticmethod
     def persist_kvstore(gcs_conn_id, gcs_bucket, keypath):
         log.info("Persisting")
-        
-        def persist_gcs(gcs_conn_id, gcs_bucket, keypath, data):
-            from airflow.providers.google.cloud.hooks.gcs import GoogleCloudStorageHook
-            import json
-            import pickle 
-            try:
-                print("Serializing")
-                output = pickle.dumps(data)
-                gcs = GoogleCloudStorageHook(gcs_conn_id)
-                print("Serialized")
-
-                with NamedTemporaryFile('w') as tmp:
-                    print("Writing")
-                    tmp.write(output)
-                    print("Flushing")
-                    tmp.flush()
-                    print("Uploading")
-                    gcs.upload(
-                        bucket=gcs_bucket,
-                        object=keypath,
-                        filename=tmp.name
-                    )
-                    print("Persisted to %s" % tmp.name)
-                    return tmp.name
-            except Exception as e:
-                print("Error thrown peristing %s" % e)
-
         ray_store = get_or_create_kv_store(
             identifier=RayBackend.store_identifier
         )
         log.info("Got Store")
-
-        data = ray_store.get_store(ray_store.identifier)
-
-        if data:
-            log.info("Got data")
-            ret_str = ray_store.execute(
-                persist_gcs,
-                args=(gcs_conn_id, gcs_bucket, keypath, data),
-                kwargs={"ray_conn_id": "ray_cluster_connection"},
-                eager=False
-            )
-        else:
-            log.info("No Data to Persist")
-
+        ret_str = ray_store.persist(gcs_conn_id, gcs_bucket, keypath)
         return ret_str
 
     @classmethod
