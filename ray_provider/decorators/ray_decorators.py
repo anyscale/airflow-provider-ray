@@ -1,10 +1,19 @@
-import logging
+import datetime
 import functools
+import logging
+import os
+import pickle
 from typing import Callable, Optional
-import ray
+
+from airflow.providers.google.cloud.hooks.gcs import GCSHook
+from airflow.providers.google.cloud.sensors.gcs import GCSObjectExistenceSensor
 from airflow.operators.python import task
+from airflow.utils.db import provide_session
 from ray_provider.hooks.ray_client import RayClientHook
 from ray_provider.xcom.ray_backend import RayBackend, get_or_create_kv_store
+
+import ray
+
 
 log = logging.getLogger(__name__)
 
@@ -64,9 +73,112 @@ def ray_task(
     @functools.wraps(python_callable)
     def wrapper(f):
 
+        def on_execute_callback(context):
+            pass
+
+        @provide_session
+        def on_retry_callback(context, session=None):
+
+            # Connect to 'airflow' namespace to access scoped actors
+            if not ray.util.client.ray.is_connected():
+                ray.util.connect('192.168.1.70:10001', namespace='airflow')
+
+            # Executes GCS download and unpickling from within Ray
+            def _load_gcs_within_ray(object_name):
+
+                # GCS conn points creds to path on Ray server
+                os.environ['AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT'] = "google-cloud-platform://?extra__google_cloud_platform__key_path=%2FUsers%2Fp%2Fcode%2Fgcs%2Fastronomer-ray-demo-87cd7cd7e58f.json&extra__google_cloud_platform__scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcloud-platform&extra__google_cloud_platform__project=airflow&extra__google_cloud_platform__num_retries=5"
+
+                # Instantiate GCSHook pointing to creds on Ray server
+                gcs_hook = GCSHook(gcp_conn_id="google_cloud_default")
+
+                # Read target value from GoogleCloudStorage
+                obj_from_gcs = gcs_hook.download(
+                    bucket_name='astro-ray',
+                    object_name=object_name,
+                    timeout=10000
+                )
+
+                # Deserialize GCS object
+                return pickle.loads(obj_from_gcs)
+
+            # Structure bucket object id
+            object_name = f"{context['dag'].dag_id}_{context['ti'].task_id}.txt"
+
+            # Execute function within Ray and return object reference key
+            obj_ref_key = ray_wrapped(lambda: _load_gcs_within_ray(object_name=object_name),
+                                      ray_conn_id,
+                                      eager=eager)()
+
+            # Retrieve the KV Actor
+            actor_ray_kv_store = ray.get_actor("ray_kv_store")
+
+            # This should be the GCS Object
+            gcs_object_within_ray = ray.get(
+                ray.get(actor_ray_kv_store.get.remote(obj_ref_key)))
+            assert gcs_object_within_ray == 1
+
+            # Write to xcom
+            RayBackend.set(
+                'return_value',
+                obj_ref_key,
+                execution_date=context['dag'].start_date,
+                task_id=context['ti'].task_id,
+                dag_id=context['dag'].dag_id
+            )
+
+            # To-do: Pass object to task as argument
+
+        @provide_session
+        def on_success_callback(context, session=None):
+            # To-do: if checkpoint=True
+            # To-do: encapsulate in a helper function
+
+            # Connect to 'airflow' namespace to access scoped actors
+            if not ray.util.client.ray.is_connected():
+                ray.util.connect('192.168.1.70:10001', namespace='airflow')
+
+            # Retrieve the KV Actor
+            actor_ray_kv_store = ray.get_actor("ray_kv_store")
+
+            # Retrieve object ref from xcom query
+            # To-do: filter by execution date instead of using latest
+            obj_ref_key = session.query(RayBackend).filter(
+                RayBackend.key == 'return_value',
+                RayBackend.task_id == context['ti'].task_id,
+                RayBackend.dag_id == context['dag'].dag_id)\
+                .order_by(RayBackend.timestamp.desc()).first().value
+
+            # Retrieve `object reference` from `KV object` i.e. the Key of the kv pair
+            obj_ref = actor_ray_kv_store.get.remote(obj_ref_key)
+
+            # Retrieve `target object reference` i.e. the Value of the kv pair
+            obj_ref_to_value = ray.get(obj_ref)
+
+            # Retrieve target value from `target object reference`
+            obj_value = ray.get(obj_ref_to_value)
+
+            # Write target value to GoogleCloudStorage
+            GCSHook(gcp_conn_id="google_cloud_default").upload(
+                bucket_name='astro-ray',
+                # To-do: create name based on dag run id
+                object_name=f"{context['dag'].dag_id}_{context['ti'].task_id}.txt",
+                data=pickle.dumps(obj_value),
+                gzip=False,
+                encoding='utf-8',
+                timeout=10000
+            )
+
+        def on_failure_callback(context):
+            pass
+
         return task(
             ray_wrapped(f, ray_conn_id, eager=eager),
             pool=ray_worker_pool,
+            on_execute_callback=on_execute_callback,
+            on_retry_callback=on_retry_callback,
+            on_success_callback=on_success_callback,
+            on_failure_callback=on_success_callback,
         )
 
     return wrapper
