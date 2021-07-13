@@ -84,20 +84,19 @@ def ray_task(
                 ray.util.connect('192.168.1.70:10001', namespace='airflow')
 
             # Executes GCS download and unpickling from within Ray
-            def _load_gcs_within_ray(object_name):
+            def _load_gcs_within_ray(object_name, bucket_name='astro-ray'):
+
+                from google.cloud import storage
+                import os
+                import pickle
 
                 # GCS conn points creds to path on Ray server
-                os.environ['AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT'] = "google-cloud-platform://?extra__google_cloud_platform__key_path=%2FUsers%2Fp%2Fcode%2Fgcs%2Fastronomer-ray-demo-87cd7cd7e58f.json&extra__google_cloud_platform__scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcloud-platform&extra__google_cloud_platform__project=airflow&extra__google_cloud_platform__num_retries=5"
-
-                # Instantiate GCSHook pointing to creds on Ray server
-                gcs_hook = GCSHook(gcp_conn_id="google_cloud_default")
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = '/Users/p/code/gcs/astronomer-ray-demo-87cd7cd7e58f.json'
 
                 # Read target value from GoogleCloudStorage
-                obj_from_gcs = gcs_hook.download(
-                    bucket_name='astro-ray',
-                    object_name=object_name,
-                    timeout=10000
-                )
+                bucket = storage.Client().bucket(bucket_name)
+                obj_from_gcs = bucket.blob(
+                    blob_name=object_name).download_as_string()
 
                 # Deserialize GCS object
                 return pickle.loads(obj_from_gcs)
