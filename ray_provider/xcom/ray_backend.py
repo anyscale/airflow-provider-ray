@@ -1,3 +1,4 @@
+from ray.util.client.common import ClientObjectRef
 from typing import List
 import logging
 import os
@@ -11,12 +12,13 @@ from sqlalchemy import func, DateTime
 import ray
 from ray import ObjectRef as RayObjectRef
 from ray_provider.hooks.ray_client import RayClientHook
+from ray_provider.tests import wrap_all_methods_with_counter, call_counter
+
 
 log = logging.getLogger(__name__)
 
 _KVStore = None
 
-from ray.util.client.common import ClientObjectRef
 
 ObjectRef = (ClientObjectRef, RayObjectRef)
 
@@ -30,67 +32,164 @@ def get_or_create_kv_store(identifier, allow_new=False):
     return _KVStore
 
 
-class KVStore:
-    @ray.remote
-    class _KvStoreActor(object):
-        def __init__(self):
-            self.store = {}
+@ray.remote
+# To-do: decorate only during test
+@wrap_all_methods_with_counter(call_counter)
+class _KvStoreActor(object):
 
-        def ping(self):
-            return 1
+    from google.cloud import storage
 
-        def get(self, key: str, signal=None) -> "ObjectRef":
-            return self.store.get(key)
+    import os
+    import pickle
 
-        def put(self, key, value: "ObjectRef", signal=None):
-            assert isinstance(value, ObjectRef), value
-            self.store[key] = value
+    def __init__(self, gcs_creds_path, bucket_name):
+        self.store = {}
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = gcs_creds_path
+        self.bucket_name = bucket_name
 
-        def execute(self, *, fn, args, kwargs, eager=False) -> str:
-            """Execute a function.
+    def show_store(self):
+        return self.store
 
-            TODO: allow resource access.
+    def call_count(self):
+        return self.n_called
 
-            :param fn: function to be executed, either on this actor or
-                in a separate remote task.
-            :type fn: func
-            :parm args: function args.
-            :type args: any
-            :param kwargs: function kwargs.
-            :type kwargs: obj
-            :param eager: This value gets past the Ray ownership model
-                    by allowing users to selectively execute tasks
-                    directly on the metadata store actor.
-                    this means that created objects like Modin Dataframes
-                    will not be GC'ed upon task completion.
-            :type eager: bool
-            """
-            ray_args = [self.get(a) for a in args]
-            ray_kwargs = {k: self.get(v) for k, v in kwargs.items()}
+    def ping(self):
+        return 1
 
-            def status_function(*args_, **kwargs_):
-                return 0, fn(*args_, **kwargs_)
+    def set_taskinstance_context(self, ti_context):
+        self.ti_context = ti_context
 
-            if eager:
-                if ray_args:
-                    ray_args = ray.get(ray_args)
-                if ray_kwargs:
-                    kwargs_list = list(ray_kwargs.items())
-                    keys, values = zip(*kwargs_list)
-                    if values:
-                        values = ray.get(values)
-                    ray_kwargs = dict(zip(keys, values))
-                result = fn(*ray_args, **ray_kwargs)
-                result = ray.put(result)
+    def get(self, key: str, signal=None) -> "ObjectRef":
+        return self.store.get(key)
+
+    def put(self, key, value: "ObjectRef", signal=None):
+        assert isinstance(value, ObjectRef), value
+        self.store[key] = value
+
+    def drop(self, key):
+        assert key in self.store
+        self.store.pop(key)
+
+    def execute(self, *, fn, args, kwargs, eager=False) -> str:
+        """Execute a function.
+
+        TODO: allow resource access.
+
+        :param fn: function to be executed, either on this actor or
+            in a separate remote task.
+        :type fn: func
+        :parm args: function args.
+        :type args: any
+        :param kwargs: function kwargs.
+        :type kwargs: obj
+        :param eager: This value gets past the Ray ownership model
+                by allowing users to selectively execute tasks
+                directly on the metadata store actor.
+                this means that created objects like Modin Dataframes
+                will not be GC'ed upon task completion.
+        :type eager: bool
+        """
+        ray_args = [self.get(a) for a in args]
+        ray_kwargs = {k: self.get(v) for k, v in kwargs.items()}
+
+        def status_function(*args_, **kwargs_):
+            return 0, fn(*args_, **kwargs_)
+
+        if eager:
+            if ray_args:
+                ray_args = ray.get(ray_args)
+            if ray_kwargs:
+                kwargs_list = list(ray_kwargs.items())
+                keys, values = zip(*kwargs_list)
+                if values:
+                    values = ray.get(values)
+                ray_kwargs = dict(zip(keys, values))
+            result = fn(*ray_args, **ray_kwargs)
+            result = ray.put(result)
+        else:
+            remote_fn = ray.remote(status_function)
+            status, result = remote_fn.options(num_returns=2).remote(
+                *ray_args, **ray_kwargs
+            )
+            ray.get(status)  # raise error if needed
+
+        self.put(str(result), result)
+        # self.put(_task_instance_string(), result)
+        return str(result)
+
+    def gcs_blob(self, dag_id, task_id):
+        # Structure GCS object name
+        # To-do: introduce execution_date
+        # To-do: `object_name` as external arg
+        from google.auth.exceptions import DefaultCredentialsError
+        object_name = '_'.join([dag_id, task_id]) + '.txt'
+        try:
+            # Create GCS blob
+            return self.storage.Client().bucket(self.bucket_name).blob(object_name)
+        except DefaultCredentialsError as e:
+            raise DefaultCredentialsError(e)
+
+    def gcs_dump(self, object_id, blob):
+
+        # Retrieve target object
+        obj = ray.get(self.get(object_id))
+
+        # Write to GCS blob
+        blob.upload_from_string(pickle.dumps(obj))
+        print('Data uploaded to %s.', blob.name)
+
+    def gcs_load(self, blob):
+        # Retrieve object from GCS if it exists
+        if blob.exists():
+            return pickle.loads(blob.download_as_bytes())
+        else:
+            return None
+
+    def obj_to_kv_store(self, obj):
+        obj_ref = ray.put(obj)
+        self.put(str(obj_ref), obj_ref)
+        return str(obj_ref)
+
+    def exists_in_gcs(self, blob):
+        return blob.exists()
+
+    def exists_in_ray(self, obj_ref):
+        """Check if object ID exists in KV Actor store.
+
+        Note: Object will not appear in KV store if Actor is reset/terminated.
+        """
+        try:
+            return ray.get(self.get(obj_ref)) is not None
+        except Exception as e:
+            return None
+
+    def recover_object(self, dag_id, task_id, obj_ref):
+        """Recover object from Ray or GCS.
+
+        Returns object ref of recovered object, or -1 if not found.
+        """
+
+        if self.exists_in_ray(obj_ref):
+            return obj_ref
+        else:
+            blob = self.gcs_blob(dag_id, task_id)
+            if self.exists_in_gcs(blob):
+                obj = self.gcs_load(blob)
+                return self.obj_to_kv_store(obj)
             else:
-                remote_fn = ray.remote(status_function)
-                status, result = remote_fn.options(num_returns=2).remote(
-                    *ray_args, **ray_kwargs
-                )
-                ray.get(status)  # raise error if needed
-            self.put(str(result), result)
-            return str(result)
+                return -1
 
+    def recover_objects(self, upstream_objects):
+        """Find objects in Ray and GCS; return their ids.
+        """
+        # To-do: Ray should be aware of task_id as fn of obj_ref
+        # To-do: Execute in parallel
+
+        return {task_id: self.recover_object(dag_id, task_id, obj_ref)
+                for dag_id, task_id, obj_ref in upstream_objects}
+
+
+class KVStore:
     def __init__(self, identifier, backend_cls=None, allow_new=False):
         backend_cls = backend_cls or RayBackend
         hook = backend_cls.get_hook()
@@ -115,18 +214,25 @@ class KVStore:
         except ValueError as e:
             log.info(e)
             if allow_new:
-                log.info(f"No problem.  Creating new Actor with identifier {identifier}")
+                log.info(
+                    f"No problem.  Creating new Actor with identifier {identifier}")
                 return self._create_new_actor(identifier)
             else:
                 raise
 
     def _create_new_actor(self, identifier):
         self.is_new = True
-        return self._KvStoreActor.options(name=identifier, lifetime="detached").remote()
+        # Retrieve GCS credentials and bucket name from env variables
+        # To-do: retrieve GCS credentials from Airflow conn
+        gcs_creds_path = os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
+        bucket_name = os.environ["GCS_BUCKET_NAME"]
+        return _KvStoreActor.options(name=identifier, lifetime="detached")\
+            .remote(gcs_creds_path, bucket_name)
 
     def execute(self, fn, *, args, kwargs, eager=False):
         """Invokes the underlying actor with given args."""
         log.debug("fetching ray_kv lock.")
+
         with FileLock("/tmp/ray_kv.lock"):
             log.debug(f"Executing.")
             res = self.actor.execute.remote(
@@ -204,7 +310,8 @@ class RayBackend(BaseXCom):
                         identifier=RayBackend.store_identifier
                     )
 
-                    actor = kv_store.get_actor(kv_store.identifier, allow_new=False)
+                    actor = kv_store.get_actor(
+                        kv_store.identifier, allow_new=False)
                     if actor is not None:
                         handles = [actor]
 
@@ -229,7 +336,8 @@ class RayBackend(BaseXCom):
                             identifier=RayBackend.store_identifier
                         )
 
-                        actor = kv_store.get_actor(kv_store.identifier, allow_new=False)
+                        actor = kv_store.get_actor(
+                            kv_store.identifier, allow_new=False)
                         if actor is not None:
                             handles = [actor]
 
@@ -247,7 +355,8 @@ class RayBackend(BaseXCom):
         """
         session.expunge_all()
 
-        value = RayBackend.serialize_value(value, key, task_id, dag_id, execution_date)
+        value = RayBackend.serialize_value(
+            value, key, task_id, dag_id, execution_date)
 
         # remove any duplicate XComs
         session.query(cls).filter(
@@ -279,7 +388,8 @@ class RayBackend(BaseXCom):
         from airflow.models.dag import DAG, DagModel, DagRun
         from airflow.models.taskinstance import _CURRENT_CONTEXT
 
-        log.debug("Setting Callbacks _CURRENT_CONTEXT looks like %s" % _CURRENT_CONTEXT)
+        log.debug("Setting Callbacks _CURRENT_CONTEXT looks like %s" %
+                  _CURRENT_CONTEXT)
 
         context = _CURRENT_CONTEXT[-1]
         dag = context.get("dag")
@@ -288,7 +398,8 @@ class RayBackend(BaseXCom):
 
         DR = DagRun
 
-        dag_obj = session.query(DagModel).filter(DagModel.dag_id == dag._dag_id).one()
+        dag_obj = session.query(DagModel).filter(
+            DagModel.dag_id == dag._dag_id).one()
 
         dr = (
             session.query(DR)

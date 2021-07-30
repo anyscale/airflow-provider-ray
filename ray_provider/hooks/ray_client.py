@@ -53,7 +53,8 @@ class RayClientHook(HttpHook):
         # so we should work to understand that as well.
         if not ray.util.client.ray.is_connected():
             if ray.__version__ >= "1.4.0":
-                ray.client(self.base_url).namespace("airflow").connect()  # let's see if this changes things
+                # let's see if this changes things
+                ray.client(self.base_url).namespace("airflow").connect()
             else:
                 ray.util.connect(self.base_url)
             log.info("New Ray Connection Established")
