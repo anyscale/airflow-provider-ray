@@ -6,6 +6,10 @@ Unittest module for Airflow Ray Provider decorator
 3. Reference the name of an existing GCS bucket accessible to the GCS credentials above.
 4. Run each test (individually to prevent Agent race contidions) with:
 
+
+    AWS_ACCESS_KEY_ID=... \
+    AWS_SECRET_ACCESS_KEY=... \
+    S3_BUCKET_NAME=astro-ray \
     GOOGLE_APPLICATION_CREDENTIALS=/Users/p/code/gcs/astronomer-ray-demo-87cd7cd7e58f.json \
     GCS_BUCKET_NAME=astro-ray \
     AIRFLOW_CONN_RAY_CLUSTER_CONNECTION=http://@192.168.1.69:10001 python3 -m unittest tests.decorators.test_decorators.TestDagrun.test_on_execute_callback_3rd_try
@@ -183,7 +187,7 @@ class TestDagrun(unittest.TestCase):
         assert out0 in store
         assert out1 in store
 
-    def test_task_execution_with_retry_and_object_not_in_ray(self):
+    def _task_execution_with_retry_and_object_not_in_ray(self):
         """Scenario where the target object is not found in Ray and is therefore 
         sought and found in GCS.
         """
@@ -240,6 +244,14 @@ class TestDagrun(unittest.TestCase):
         store3 = ray.get(self.actor_ray_kv_store.show_store.remote())
 
         assert len(store3) == 3
+
+    @mock.patch.dict('os.environ',  CHECKPOINTING_CLOUD_STORAGE="GCS")
+    def test_retry_with_object_in_gcs(self):
+        self._task_execution_with_retry_and_object_not_in_ray()
+
+    @mock.patch.dict('os.environ',  CHECKPOINTING_CLOUD_STORAGE="AWS")
+    def test_retry_with_object_in_aws(self):
+        self._task_execution_with_retry_and_object_not_in_ray()
 
     def test_gcs_conn(self):
         """Test that Ray Actor connects to GCS.

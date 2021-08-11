@@ -3,6 +3,7 @@ import logging
 import functools
 from typing import Callable, Optional
 from typing import Dict, Optional, Callable, List, Any
+import os
 
 from airflow.decorators.base import task_decorator_factory
 from airflow.decorators.python import _PythonDecoratedOperator
@@ -12,6 +13,8 @@ from airflow.operators.python import PythonOperator
 from airflow.utils.db import provide_session
 from airflow.utils.session import provide_session
 from airflow.exceptions import AirflowException
+from airflow.models import DagRun
+from airflow.utils.types import DagRunType
 import ray
 
 from ray_provider.xcom.ray_backend import RayBackend, get_or_create_kv_store, KVStore
@@ -63,9 +66,16 @@ def ray_task(
         # Retrieve the KV Actor
         actor_ray_kv_store = KVStore("ray_kv_store").get_actor("ray_kv_store")
 
-        # Write to GCS
+        # Checkpoint all upstream objects to cloud storage
+        run_id = DagRun.generate_run_id(
+            DagRunType.MANUAL, context.get('dag_run').execution_date)
         for dag_id, task_id, obj_ref in upstream_objects:
-            actor_ray_kv_store.gcs_dump.remote(dag_id, task_id, obj_ref)
+            actor_ray_kv_store.checkpoint_object.remote(
+                dag_id,
+                task_id,
+                run_id,
+                obj_ref,
+                cloud_storage=os.getenv('CHECKPOINTING_CLOUD_STORAGE', None))
 
     @functools.wraps(python_callable)
     def wrapper(f):
@@ -80,6 +90,13 @@ def ray_task(
 
 
 class RayPythonOperator(PythonOperator):
+    """Subclass `PythonOperator` to customize execution and pre-execution 
+    behavior.
+
+    a) `__init__` holds XComArgs to enable assignment of recovered objects
+    b) `execute` forces Task failure if upstream objects fail to recover
+    c) `pre_execute` recovers upstream objects for a given Task in retry state
+    """
 
     def __init__(self, *,
                  python_callable: Callable,
@@ -132,8 +149,13 @@ class RayPythonOperator(PythonOperator):
             task_id, task.dag.dag_id) for task_id in upstream_tasks]
 
         # Retrieve object refs from Ray kv store
+        run_id = DagRun.generate_run_id(
+            DagRunType.MANUAL, context.get('dag_run').execution_date)
         recovered_obj_refs = ray.get(
-            actor_ray_kv_store.recover_objects.remote(upstream_objects))
+            actor_ray_kv_store.recover_objects.remote(
+                upstream_objects,
+                run_id,
+                cloud_storage=os.getenv('CHECKPOINTING_CLOUD_STORAGE', None)))
 
         # Set recovered objects as current Task's XComArgs
         for task_id, obj_ref in recovered_obj_refs.items():
@@ -194,6 +216,9 @@ class RayPythonOperator(PythonOperator):
 
 
 class _RayDecoratedOperator(_PythonDecoratedOperator, RayPythonOperator):
+    """Supplant execution and pre-execution methods of _PythonDecoratedOperator
+    with those defined by `RayPythonOperator`.
+    """
     pass
 
 

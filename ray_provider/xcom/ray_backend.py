@@ -35,25 +35,28 @@ class KVStore:
 
     @ray.remote
     class _KvStoreActor(object):
+        """Ray Actor that stores task-output objects and checkpoints in GCS or
+        AWS.
 
-        from google.cloud import storage
+        Note: GCS and AWS pick up credentials from env variables, so there 
+        is no need to specify them as variables.
+        """
 
         import os
         import pickle
 
-        def __init__(self, gcs_creds_path, bucket_name):
+        def __init__(self, env_var_payload):
             self.store = {}
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = gcs_creds_path
-            self.bucket_name = bucket_name
+
+            # Set passed environment variables
+            for k, v in env_var_payload.items():
+                os.environ[k] = v or ''
 
         def show_store(self):
             return self.store
 
         def ping(self):
             return 1
-
-        def set_taskinstance_context(self, ti_context):
-            self.ti_context = ti_context
 
         def get(self, key: str, signal=None) -> "ObjectRef":
             return self.store.get(key)
@@ -113,42 +116,10 @@ class KVStore:
             # self.put(_task_instance_string(), result)
             return str(result)
 
-        def gcs_blob(self, dag_id, task_id):
-            # Structure GCS object name
-            # To-do: introduce execution_date
-            # To-do: `object_name` as external arg
-            from google.auth.exceptions import DefaultCredentialsError
-            object_name = '_'.join([dag_id, task_id]) + '.txt'
-            try:
-                # Create GCS blob
-                return self.storage.Client().bucket(self.bucket_name).blob(object_name)
-            except DefaultCredentialsError as e:
-                raise DefaultCredentialsError(e)
-
-        def gcs_dump(self, dag_id, task_id, object_id):
-
-            blob = self.gcs_blob(dag_id, task_id)
-            # Retrieve target object
-            obj = ray.get(self.get(object_id))
-
-            # Write to GCS blob
-            blob.upload_from_string(pickle.dumps(obj))
-            print('Data uploaded to %s.', blob.name)
-
-        def gcs_load(self, blob):
-            # Retrieve object from GCS if it exists
-            if blob.exists():
-                return pickle.loads(blob.download_as_bytes())
-            else:
-                return None
-
         def obj_to_kv_store(self, obj):
             obj_ref = ray.put(obj)
             self.put(str(obj_ref), obj_ref)
             return str(obj_ref)
-
-        def exists_in_gcs(self, blob):
-            return blob.exists()
 
         def exists_in_ray(self, obj_ref):
             """Check if object ID exists in KV Actor store.
@@ -160,30 +131,113 @@ class KVStore:
             except Exception as e:
                 return None
 
-        def recover_object(self, dag_id, task_id, obj_ref):
-            """Recover object from Ray or GCS.
+        def _external_object_name(self, dag_id, task_id, run_id):
+            """Structure name of external object."""
+            # To-do: introduce dag_run_id
+            return '_'.join([dag_id, task_id, run_id]) + '.txt'
 
-            Returns object ref of recovered object, or -404 if not found.
+        def gcs_blob(self, object_name):
+            # Structure GCS object name
+            from google.cloud import storage
+            from google.auth.exceptions import DefaultCredentialsError
+
+            try:
+                # Create GCS blob
+                return storage.Client().bucket(os.environ['GCS_BUCKET_NAME']).blob(object_name)
+            except DefaultCredentialsError as e:
+                raise DefaultCredentialsError(e)
+
+        def checkpoint_object(self, dag_id, task_id, run_id, object_id, cloud_storage='GCS'):
+            """Write pickled object to external data store.
+
+            `cloud_storage` attribute specifies whether to write to GCS or AWS.
             """
+            def dump_object_to_aws():
+                import boto3
+                # Retrieve target object
+                obj = ray.get(self.get(object_id))
 
-            if self.exists_in_ray(obj_ref):
-                return obj_ref
+                # Write to AWS S3 Bucket
+                boto3.client('s3').put_object(
+                    Body=pickle.dumps(obj),
+                    Bucket=os.environ['S3_BUCKET_NAME'],
+                    Key=object_name)
+                print('Data uploaded to %s.', object_name)
+
+            def dump_object_to_gcs():
+
+                # Retrieve target object
+                obj = ray.get(self.get(object_id))
+
+                # Write to GCS blob
+                blob = self.gcs_blob(object_name)
+                blob.upload_from_string(pickle.dumps(obj))
+                print('Data uploaded to %s.', blob.name)
+
+            object_name = self._external_object_name(dag_id, task_id, run_id)
+            if cloud_storage == 'GCS':
+                dump_object_to_gcs()
+            elif cloud_storage == 'AWS':
+                dump_object_to_aws()
             else:
-                blob = self.gcs_blob(dag_id, task_id)
-                if self.exists_in_gcs(blob):
-                    obj = self.gcs_load(blob)
-                    return self.obj_to_kv_store(obj)
-                else:
-                    return -404
+                raise Exception(
+                    "Please set the `CHECKPOINTING_CLOUD_STORAGE` environment variable to specify GCS or AWS as the cloud storage provider.")
 
-        def recover_objects(self, upstream_objects):
-            """Find objects in Ray and GCS; return their ids.
+        def recover_objects(self, upstream_objects, run_id, cloud_storage='GCS'):
+            """Find objects first in Ray then in GCS/AWS; return object ref ids.
             """
-            # To-do: Ray should be aware of task_id as fn of obj_ref
-            # To-do: Execute in parallel
+            def recover_object_from_gcs(dag_id, task_id, obj_ref):
+                """Recover object from Ray or GCS.
 
-            return {task_id: self.recover_object(dag_id, task_id, obj_ref)
-                    for dag_id, task_id, obj_ref in upstream_objects}
+                Returns object ref of recovered object, or -404 if not found.
+                """
+
+                if self.exists_in_ray(obj_ref):
+                    return obj_ref
+                else:
+                    blob = self.gcs_blob(
+                        self._external_object_name(dag_id, task_id, run_id))
+                    if blob.exists():
+                        # Retrieve object from GCS if it exists
+                        obj = pickle.loads(blob.download_as_bytes())
+                        return self.obj_to_kv_store(obj)
+                    else:
+                        return -404
+
+            def recover_object_from_aws(dag_id, task_id, obj_ref):
+                """Recover object from Ray or AWS.
+
+                Returns object ref of recovered object, or -404 if not found.
+                """
+                import boto3
+
+                object_name = self._external_object_name(
+                    dag_id, task_id, run_id)
+
+                if self.exists_in_ray(obj_ref):
+                    return obj_ref
+                else:
+                    # If object exists in S3 bucket
+                    if 'Contents' in boto3.client('s3').list_objects(Bucket=os.environ['S3_BUCKET_NAME'], Prefix=object_name):
+                        # Retrieve object from AWS S3 if it exists
+                        pickled_obj = boto3.client('s3').get_object(
+                            Bucket=os.environ['S3_BUCKET_NAME'],
+                            Key=object_name)['Body'].read()
+                        obj = pickle.loads(pickled_obj)
+                        return self.obj_to_kv_store(obj)
+
+                    else:
+                        return -404
+
+            if cloud_storage == 'GCS':
+                return {task_id: recover_object_from_gcs(dag_id, task_id, obj_ref)
+                        for dag_id, task_id, obj_ref in upstream_objects}
+            elif cloud_storage == 'AWS':
+                return {task_id: recover_object_from_aws(dag_id, task_id, obj_ref)
+                        for dag_id, task_id, obj_ref in upstream_objects}
+            else:
+                raise Exception(
+                    "Please set the `CHECKPOINTING_CLOUD_STORAGE` environment variable to specify GCS or AWS as the cloud storage provider.")
 
     def __init__(self, identifier, backend_cls=None, allow_new=False):
         backend_cls = backend_cls or RayBackend
@@ -202,7 +256,7 @@ class KVStore:
         :type allow_new: bool
         """
         try:
-            log.debug(f"trying to get this actor {identifier} here")
+            log.debug(f"Retrieve {identifier} actor.")
             ret = ray.get_actor(identifier)
             self.is_new = False
             return ret
@@ -210,7 +264,7 @@ class KVStore:
             log.info(e)
             if allow_new:
                 log.info(
-                    f"No problem.  Creating new Actor with identifier {identifier}")
+                    f"Actor not found, create new Actor with identifier {identifier}.")
                 return self._create_new_actor(identifier)
             else:
                 raise
@@ -219,10 +273,19 @@ class KVStore:
         self.is_new = True
         # Retrieve GCS credentials and bucket name from env variables
         # To-do: retrieve GCS credentials from Airflow conn
-        gcs_creds_path = os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
-        bucket_name = os.environ["GCS_BUCKET_NAME"]
+
+        # Pass env variables to Ray
+        env_var_payload = {var_name: os.getenv(var_name, None) for var_name in [
+            'GOOGLE_APPLICATION_CREDENTIALS',
+            'GCS_BUCKET_NAME',
+            'CHECKPOINTING_CLOUD_STORAGE',
+            'AWS_ACCESS_KEY_ID',
+            'AWS_SECRET_ACCESS_KEY',
+            'S3_BUCKET_NAME'
+        ]}
+
         return self._KvStoreActor.options(name=identifier, lifetime="detached")\
-            .remote(gcs_creds_path, bucket_name)
+            .remote(env_var_payload)
 
     def execute(self, fn, *, args, kwargs, eager=False):
         """Invokes the underlying actor with given args."""

@@ -36,8 +36,8 @@ def demo():
         return 2
 
     @ray_task(**task_args)
-    def transform_data(data, data2):
-        return data * data2 * 100
+    def transform_data(data1, data2):
+        return data1 * data2 * 100
 
     # Upstream outputs save to GCS when this task retries
     @ray_task(**task_args)
