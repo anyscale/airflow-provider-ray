@@ -162,7 +162,7 @@ class KVStore:
                     Body=pickle.dumps(obj),
                     Bucket=os.environ['S3_BUCKET_NAME'],
                     Key=object_name)
-                print('Data uploaded to %s.', object_name)
+                log.info('Data uploaded to %s.', object_name)
 
             def dump_object_to_gcs():
 
@@ -172,7 +172,7 @@ class KVStore:
                 # Write to GCS blob
                 blob = self.gcs_blob(object_name)
                 blob.upload_from_string(pickle.dumps(obj))
-                print('Data uploaded to %s.', blob.name)
+                log.info('Data uploaded to %s.', blob.name)
 
             object_name = self._external_object_name(dag_id, task_id, run_id)
             if cloud_storage == 'GCS':

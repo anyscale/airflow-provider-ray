@@ -10,7 +10,7 @@ Unittest module for Airflow Ray Provider decorator
     AWS_ACCESS_KEY_ID=... \
     AWS_SECRET_ACCESS_KEY=... \
     S3_BUCKET_NAME=astro-ray \
-    GOOGLE_APPLICATION_CREDENTIALS=/Users/p/code/gcs/astronomer-ray-demo-87cd7cd7e58f.json \
+    GOOGLE_APPLICATION_CREDENTIALS=/path/to/google/creds.json \
     GCS_BUCKET_NAME=astro-ray \
     AIRFLOW_CONN_RAY_CLUSTER_CONNECTION=http://@192.168.1.69:10001 python3 -m unittest tests.decorators.test_decorators.TestDagrun.test_on_execute_callback_3rd_try
 
@@ -258,3 +258,28 @@ class TestDagrun(unittest.TestCase):
         """
         self.actor_ray_kv_store
         self.actor_ray_kv_store.gcs_blob.remote('demo', 'load_data')
+
+    @mock.patch.dict('os.environ',  CHECKPOINTING_CLOUD_STORAGE="GCS")
+    def test_checkpoint_flag(self):
+
+        # breakpoint()
+        # Write TIs to db
+        tis = list(map(self.session.merge, self._tis))
+
+        # Create dagrun
+        dr = self.dag.create_dagrun(  # Creates `task_instance` record
+            run_id=DagRunType.MANUAL.value,
+            start_date=timezone.utcnow(),
+            execution_date=DEFAULT_DATE,
+            state=State.RUNNING,
+        )
+        self.session.commit()
+
+        # Execute task (Writes to xcom)
+        self._tis[0]._run_raw_task()
+        self._tis[1]._run_raw_task()
+        self._tis[2]._run_raw_task()
+
+        # Execute task
+        self._tis[1].task.on_success_callback(
+            context=self._tis[1].get_template_context())

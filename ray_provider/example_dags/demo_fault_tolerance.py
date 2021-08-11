@@ -31,7 +31,7 @@ def demo():
     def load_data1():
         return 1
 
-    @ray_task(**task_args)
+    @ray_task(**task_args, checkpoint=True)
     def load_data2():
         return 2
 
