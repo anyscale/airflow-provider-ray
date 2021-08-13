@@ -34,7 +34,7 @@ def get_or_create_kv_store(identifier, allow_new=False):
 class KVStore:
 
     @ray.remote
-    class _KvStoreActor(object):
+    class _KVStoreActor(object):
         """Ray Actor that stores task-output objects and checkpoints in GCS or
         AWS.
 
@@ -133,7 +133,6 @@ class KVStore:
 
         def _external_object_name(self, dag_id, task_id, run_id):
             """Structure name of external object."""
-            # To-do: introduce dag_run_id
             return '_'.join([dag_id, task_id, run_id]) + '.txt'
 
         def gcs_blob(self, object_name):
@@ -271,8 +270,6 @@ class KVStore:
 
     def _create_new_actor(self, identifier):
         self.is_new = True
-        # Retrieve GCS credentials and bucket name from env variables
-        # To-do: retrieve GCS credentials from Airflow conn
 
         # Pass env variables to Ray
         env_var_payload = {var_name: os.getenv(var_name, None) for var_name in [
@@ -284,7 +281,7 @@ class KVStore:
             'S3_BUCKET_NAME'
         ]}
 
-        return self._KvStoreActor.options(name=identifier, lifetime="detached")\
+        return self._KVStoreActor.options(name=identifier, lifetime="detached")\
             .remote(env_var_payload)
 
     def execute(self, fn, *, args, kwargs, eager=False):
@@ -310,8 +307,6 @@ class RayBackend(BaseXCom):
         RUN pip uninstall astronomer-airflow-version-check -y
         USER astro
         ENV AIRFLOW__CORE__XCOM_BACKEND=ray_provider.xcom.ray_backend.RayBackend
-        ENV GOOGLE_APPLICATION_CREDENTIALS=/path/to/gcs/creds/in/ray-cluster.json
-        ENV GCS_BUCKET_NAME=target-bucket
     """
 
     conn_id = os.getenv("ray_cluster_conn_id", "ray_cluster_connection")
@@ -409,8 +404,7 @@ class RayBackend(BaseXCom):
     @classmethod
     @provide_session
     def set(cls, key, value, execution_date, task_id, dag_id, session=None):
-        """
-        Store an RayBackend value.
+        """Store a RayBackend value.
         :return: None
         """
         session.expunge_all()

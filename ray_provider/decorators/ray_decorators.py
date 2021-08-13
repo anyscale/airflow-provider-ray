@@ -33,9 +33,9 @@ def ray_wrapped(f, ray_conn_id="ray_default", eager=False):
             identifier=RayBackend.store_identifier, allow_new=True
         )
 
-        log.info(f"[wrapper] Launching task (with {args}, {kwargs}.")
+        log.info(f"[wrapper] Launching task with {args}, {kwargs}.")
         ret_str = executor.execute(f, args=args, kwargs=kwargs, eager=eager)
-        log.info("[wrapper] Remote task finished")
+        log.info("[wrapper] Remote task finished.")
         return ret_str
 
     return wrapper
@@ -51,47 +51,12 @@ def ray_task(
     """Wraps a function to be executed on the Ray cluster.
     """
 
-    @provide_session
-    def on_retry_callback(context, session=None):
-        """When a task is set to retry, store the output of its upstream tasks.
-        """
-
-        # Retrieve cloud storage flag from environment variable
-        cloud_storage = os.getenv('CHECKPOINTING_CLOUD_STORAGE', None)
-
-        # If adequate cloud storage not specified, don't recover upstream objects
-        if cloud_storage not in ['GCS', 'AWS']:
-            return
-
-        # List upstream task ids
-        upstream_tasks = RayPythonOperator._upstream_tasks(
-            context.get('ti').task_id, context.get('dag'))
-
-        # Retrieve upstream object ids from xcom
-        upstream_objects = [RayPythonOperator._retrieve_obj_id_from_xcom(
-            task_id, context.get('dag').dag_id) for task_id in upstream_tasks]
-
-        # Retrieve the KV Actor
-        actor_ray_kv_store = KVStore("ray_kv_store").get_actor("ray_kv_store")
-
-        # Checkpoint all upstream objects to cloud storage
-        run_id = DagRun.generate_run_id(
-            DagRunType.MANUAL, context.get('dag_run').execution_date)
-        for dag_id, task_id, obj_ref in upstream_objects:
-            actor_ray_kv_store.checkpoint_object.remote(
-                dag_id,
-                task_id,
-                run_id,
-                obj_ref,
-                cloud_storage)
-
     @functools.wraps(python_callable)
     def wrapper(f):
 
         return task(
             ray_wrapped(f, ray_conn_id, eager=eager),
             pool=ray_worker_pool,
-            on_retry_callback=on_retry_callback,
             checkpoint=checkpoint
         )
 
@@ -124,8 +89,12 @@ class RayPythonOperator(PythonOperator):
         # Pop item to prevent passing it to `PythonOperator` superclass
         self.checkpoint = kwargs.pop('checkpoint')
 
+        # If specified, enable checkpointing on success for this Task
         if self.checkpoint:
             kwargs['on_success_callback'] = self.checkpoint_on_success_callback
+
+        # Enable checkpointing of upstream if this Task retries
+        kwargs['on_retry_callback'] = self.checkpoint_on_retry_callback
 
         # Indicate whether upstream task arguments were retrieved
         self.upstream_not_retrieved = False
@@ -162,6 +131,8 @@ class RayPythonOperator(PythonOperator):
         if cloud_storage not in ['GCS', 'AWS']:
             return
 
+        log.info(f"Checkpointing output of upstream Tasks to {cloud_storage}.")
+
         # Retrieve the KV Actor
         actor_ray_kv_store = KVStore("ray_kv_store").get_actor("ray_kv_store")
 
@@ -170,7 +141,9 @@ class RayPythonOperator(PythonOperator):
 
         # Retrieve upstream object ids from xcom
         upstream_objects = [self._retrieve_obj_id_from_xcom(
-            task_id, task.dag.dag_id) for task_id in upstream_tasks]
+            task_id,
+            task.dag.dag_id,
+            context.get('dag_run').execution_date) for task_id in upstream_tasks]
 
         # Retrieve object refs from Ray kv store
         run_id = DagRun.generate_run_id(
@@ -212,13 +185,13 @@ class RayPythonOperator(PythonOperator):
 
     @staticmethod
     @provide_session
-    def _retrieve_obj_id_from_xcom(task_id, dag_id, session=None):
-        # To-do: incorporate execution id in filter
+    def _retrieve_obj_id_from_xcom(task_id, dag_id, execution_date, session=None):
 
         obj_ref_key = session.query(RayBackend).filter(
             RayBackend.key == 'return_value',
             RayBackend.task_id == task_id,
-            RayBackend.dag_id == dag_id) \
+            RayBackend.dag_id == dag_id,
+            RayBackend.execution_date == execution_date) \
             .order_by(RayBackend.timestamp.desc()).first()
 
         return (dag_id, task_id, obj_ref_key.value if bool(obj_ref_key) else None)
@@ -241,6 +214,7 @@ class RayPythonOperator(PythonOperator):
     def checkpoint_on_success_callback(self, context):
         # Retrieve cloud storage flag from environment variable
         cloud_storage = os.getenv('CHECKPOINTING_CLOUD_STORAGE', None)
+        log.info(f"Checkpointing Task output to {cloud_storage}.")
 
         # If adequate cloud storage not specified, don't recover upstream objects
         if cloud_storage not in ['GCS', 'AWS']:
@@ -248,7 +222,41 @@ class RayPythonOperator(PythonOperator):
 
         # Retrieve object id from xcom
         dag_id, task_id, obj_ref = RayPythonOperator._retrieve_obj_id_from_xcom(
-            context.get('ti').task_id, context.get('dag').dag_id)
+            context.get('ti').task_id,
+            context.get('dag').dag_id,
+            context.get('dag_run').execution_date)
+
+        # Retrieve the KV Actor
+        actor_ray_kv_store = KVStore("ray_kv_store").get_actor("ray_kv_store")
+
+        # Checkpoint output objects to cloud storage
+        run_id = DagRun.generate_run_id(
+            DagRunType.MANUAL, context.get('dag_run').execution_date)
+
+        actor_ray_kv_store.checkpoint_object.remote(
+            dag_id, task_id, run_id, obj_ref, cloud_storage)
+
+    def checkpoint_on_retry_callback(self, context):
+        """When a task is set to retry, store the output of its upstream tasks.
+        """
+
+        # Retrieve cloud storage flag from environment variable
+        cloud_storage = os.getenv('CHECKPOINTING_CLOUD_STORAGE', None)
+
+        # If adequate cloud storage not specified, don't recover upstream objects
+        if cloud_storage not in ['GCS', 'AWS']:
+            return
+
+        # List upstream task ids
+        upstream_tasks = RayPythonOperator._upstream_tasks(
+            context.get('ti').task_id, context.get('dag'))
+
+        # Retrieve upstream object ids from xcom
+
+        upstream_objects = [RayPythonOperator._retrieve_obj_id_from_xcom(
+            task_id,
+            context.get('dag').dag_id,
+            context.get('dag_run').execution_date) for task_id in upstream_tasks]
 
         # Retrieve the KV Actor
         actor_ray_kv_store = KVStore("ray_kv_store").get_actor("ray_kv_store")
@@ -256,9 +264,13 @@ class RayPythonOperator(PythonOperator):
         # Checkpoint all upstream objects to cloud storage
         run_id = DagRun.generate_run_id(
             DagRunType.MANUAL, context.get('dag_run').execution_date)
-
-        actor_ray_kv_store.checkpoint_object.remote(
-            dag_id, task_id, run_id, obj_ref, cloud_storage)
+        for dag_id, task_id, obj_ref in upstream_objects:
+            actor_ray_kv_store.checkpoint_object.remote(
+                dag_id,
+                task_id,
+                run_id,
+                obj_ref,
+                cloud_storage)
 
 
 class _RayDecoratedOperator(_PythonDecoratedOperator, RayPythonOperator):

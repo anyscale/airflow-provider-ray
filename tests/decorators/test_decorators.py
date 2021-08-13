@@ -85,7 +85,6 @@ class TestDagrun(unittest.TestCase):
         except:
             pass
 
-        # To-do: wrap `_KvStoreActor` only during testing
         _KVStore = KVStore(self.actor_name, allow_new=True)
 
         self.actor_ray_kv_store = ray.get_actor(self.actor_name)
