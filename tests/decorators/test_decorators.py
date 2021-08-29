@@ -69,7 +69,7 @@ class TestDagrun(unittest.TestCase):
         self._tis = [TI(task=task, execution_date=DEFAULT_DATE, state=State.RUNNING)
                      for task in self.dag.tasks]
 
-        # Airflob db session
+        # Airflow db session
         self.session = settings.Session()
 
         # Connect to Ray
@@ -261,7 +261,6 @@ class TestDagrun(unittest.TestCase):
     @mock.patch.dict('os.environ',  CHECKPOINTING_CLOUD_STORAGE="GCS")
     def test_checkpoint_flag(self):
 
-        # breakpoint()
         # Write TIs to db
         tis = list(map(self.session.merge, self._tis))
 
