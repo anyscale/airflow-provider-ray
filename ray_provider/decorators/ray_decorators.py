@@ -17,10 +17,13 @@ from airflow.models import DagRun
 from airflow.utils.types import DagRunType
 import ray
 
-from ray_provider.xcom.ray_backend import RayBackend, get_or_create_kv_store, KVStore
-
+from ray_provider.xcom.ray_backend import get_or_create_kv_store, KVStore
+from airflow.models.xcom import BaseXCom
 
 log = logging.getLogger(__name__)
+
+
+RAY_STORE_IDENTIFIER = 'ray_kv_store'
 
 
 def ray_wrapped(f, ray_conn_id="ray_default", eager=False):
@@ -30,7 +33,7 @@ def ray_wrapped(f, ray_conn_id="ray_default", eager=False):
         log.info("[wrapper] Got executor.")
 
         executor = get_or_create_kv_store(
-            identifier=RayBackend.store_identifier, allow_new=True
+            identifier=RAY_STORE_IDENTIFIER, allow_new=True
         )
 
         log.info(f"[wrapper] Launching task with {args}, {kwargs}.")
@@ -162,7 +165,7 @@ class RayPythonOperator(PythonOperator):
                 self.upstream_not_retrieved = True
 
             if 'ObjectRef' in str(obj_ref):
-                RayBackend.set(
+                BaseXCom.set(
                     key='return_value',
                     value=str(obj_ref),
                     execution_date=ti.execution_date,
@@ -187,12 +190,12 @@ class RayPythonOperator(PythonOperator):
     @provide_session
     def _retrieve_obj_id_from_xcom(task_id, dag_id, execution_date, session=None):
 
-        obj_ref_key = session.query(RayBackend).filter(
-            RayBackend.key == 'return_value',
-            RayBackend.task_id == task_id,
-            RayBackend.dag_id == dag_id,
-            RayBackend.execution_date == execution_date) \
-            .order_by(RayBackend.timestamp.desc()).first()
+        obj_ref_key = session.query(BaseXCom).filter(
+            BaseXCom.key == 'return_value',
+            BaseXCom.task_id == task_id,
+            BaseXCom.dag_id == dag_id,
+            BaseXCom.execution_date == execution_date) \
+            .order_by(BaseXCom.timestamp.desc()).first()
 
         return (dag_id, task_id, obj_ref_key.value if bool(obj_ref_key) else None)
 

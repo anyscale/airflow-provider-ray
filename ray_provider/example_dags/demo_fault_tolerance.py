@@ -1,6 +1,5 @@
 from airflow.decorators import dag, task
 from ray_provider.decorators.ray_decorators import ray_task
-from ray_provider.xcom.ray_backend import RayBackend
 
 
 from datetime import datetime
@@ -8,8 +7,6 @@ from datetime import datetime
 
 default_args = {
     "owner": "airflow",
-    "on_success_callback": RayBackend.on_success_callback,
-    "on_failure_callback": RayBackend.on_failure_callback,
     "retries": 1,
     "retry_delay": 0,
 }

@@ -64,7 +64,6 @@ specify your custom backend, along with the provider wheel install. Add the foll
     USER root
     RUN pip uninstall astronomer-airflow-version-check -y
     USER astro
-    ENV AIRFLOW__CORE__XCOM_BACKEND=ray_provider.xcom.ray_backend.RayBackend
     ```
 
     > Check ap-airflow version, if unsure, change to `ap-airflow:latest-onbuild`
@@ -106,44 +105,15 @@ memory.To start, in your environment with ray installed, run:
     Port: 10001
     ```
 
-9. In your Airflow DAG python file, you must include the following in your
-`default_args` dictionary:
 
-    ```python
-    from ray_provider.xcom.ray_backend import RayBackend
-    .
-    .
-    .
-    default_args = {
-        'on_success_callback': RayBackend.on_success_callback,
-        'on_failure_callback': RayBackend.on_failure_callback,
-        .
-        .
-        .
-    }
-    @dag(
-        default_args=default_args,
-        .
-        .
-    )
-    def ray_example_dag():
-        # do stuff
-    ```
-
-10. Using the taskflow API, your airflow task should now use the
+9. Using the taskflow API, your airflow task should now use the
 `@ray_task` decorator for any ray task and add the `ray_conn_id`,
 parameter as `task_args`, like:
 
     ```python
     from ray_provider.decorators import ray_task
 
-    default_args = {
-        'on_success_callback': RayBackend.on_success_callback,
-        'on_failure_callback': RayBackend.on_failure_callback,
-        .
-        .
-        .
-    }
+    default_args = {"owner": "airflow"}
     task_args = {"ray_conn_id": "ray_cluster_connection"}
     .
     .

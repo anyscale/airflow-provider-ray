@@ -10,7 +10,6 @@ import xgboost_ray as xgbr
 import xgboost as xgb
 from ray import tune
 from ray.tune.schedulers import ASHAScheduler
-from ray_provider.xcom.ray_backend import RayBackend
 from xgboost_ray.tune import TuneReportCheckpointCallback
 from datetime import datetime
 
@@ -18,8 +17,6 @@ from datetime import datetime
 # You can override them on a per-task basis during operator initialization
 default_args = {
     "owner": "airflow",
-    "on_success_callback": RayBackend.on_success_callback,
-    "on_failure_callback": RayBackend.on_failure_callback,
 }
 
 task_args = {"ray_conn_id": "ray_cluster_connection"}
@@ -28,7 +25,8 @@ task_args = {"ray_conn_id": "ray_cluster_connection"}
 SIMPLE = False
 
 # Change actors and cpus per actor here as per resources allow
-XGB_RAY_PARAMS = xgbr.RayParams(max_actor_restarts=1, num_actors=1, cpus_per_actor=1)
+XGB_RAY_PARAMS = xgbr.RayParams(
+    max_actor_restarts=1, num_actors=1, cpus_per_actor=1)
 
 ROOT_DIR = "."
 LOCAL_DIR = f"{ROOT_DIR}/ray_results"
@@ -87,7 +85,8 @@ def xgboost_pandas_tune_breast_cancer():
         else:
             df_train = data[(data["feature-01"] < 0.4)]
             colnames = ["label"] + ["feature-%02d" % i for i in range(1, 29)]
-            train_set = xgbr.RayDMatrix(df_train, label="label", columns=colnames)
+            train_set = xgbr.RayDMatrix(
+                df_train, label="label", columns=colnames)
             df_validation = data[
                 (data["feature-01"] >= 0.4) & (data["feature-01"] < 0.8)
             ]
@@ -164,7 +163,8 @@ def xgboost_pandas_tune_breast_cancer():
         )
         print("Loading Model with Best Params")
 
-        best_bst.load_model(os.path.join(analysis.best_checkpoint, "model.xgb"))
+        best_bst.load_model(os.path.join(
+            analysis.best_checkpoint, "model.xgb"))
         accuracy = 1.0 - analysis.best_result["eval-error"]
 
         print(f"Best model parameters: {analysis.best_config}")

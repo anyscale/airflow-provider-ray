@@ -8,15 +8,12 @@ import ray
 from ray_provider.decorators.ray_decorators import ray_task
 import numpy as np
 import xgboost_ray as xgb
-from ray_provider.xcom.ray_backend import RayBackend
 from datetime import datetime
 
 # These args will get passed on to each operator
 # You can override them on a per-task basis during operator initialization
 default_args = {
     "owner": "airflow",
-    "on_success_callback": RayBackend.on_success_callback,
-    "on_failure_callback": RayBackend.on_failure_callback,
 }
 
 task_args = {"ray_conn_id": "ray_cluster_connection"}
@@ -72,7 +69,8 @@ def xgboost_modin_breast_cancer():
         else:
             df_train = data[(data["feature-01"] < 0.4)]
             colnames = ["label"] + ["feature-%02d" % i for i in range(1, 29)]
-            train_set = xgb.RayDMatrix(df_train, label="label", columns=colnames)
+            train_set = xgb.RayDMatrix(
+                df_train, label="label", columns=colnames)
             df_validation = data[
                 (data["feature-01"] >= 0.4) & (data["feature-01"] < 0.8)
             ]

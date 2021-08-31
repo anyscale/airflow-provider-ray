@@ -12,7 +12,7 @@ Unittest module for Airflow Ray Provider decorator
     S3_BUCKET_NAME=astro-ray \
     GOOGLE_APPLICATION_CREDENTIALS=/path/to/google/creds.json \
     GCS_BUCKET_NAME=astro-ray \
-    AIRFLOW_CONN_RAY_CLUSTER_CONNECTION=http://@192.168.1.69:10001 python3 -m unittest tests.decorators.test_decorators.TestDagrun.test_on_execute_callback_3rd_try
+    AIRFLOW_CONN_RAY_CLUSTER_CONNECTION=http://@192.168.1.75:10001 python3 -m unittest tests.decorators.test_decorators.TestDagrun.test_on_execute_callback_3rd_try
 
 """
 
@@ -34,7 +34,7 @@ from airflow import settings
 
 import ray
 
-from ray_provider.xcom.ray_backend import RayBackend, get_or_create_kv_store, KVStore
+from ray_provider.xcom.ray_backend import get_or_create_kv_store, KVStore
 from ray_provider.hooks.ray_client import RayClientHook
 from ray_provider.decorators.ray_decorators import RayPythonOperator
 
@@ -42,7 +42,6 @@ DEFAULT_DATE = timezone.utcnow()
 log = logging.getLogger(__name__)
 
 
-@mock.patch.dict('os.environ',  AIRFLOW__CORE__XCOM_BACKEND="ray_provider.xcom.ray_backend.RayBackend")
 class TestDagrun(unittest.TestCase):
     """
     Test Ray Decorator
@@ -69,7 +68,7 @@ class TestDagrun(unittest.TestCase):
         self._tis = [TI(task=task, execution_date=DEFAULT_DATE, state=State.RUNNING)
                      for task in self.dag.tasks]
 
-        # Airflob db session
+        # Airflow db session
         self.session = settings.Session()
 
         # Connect to Ray
@@ -105,17 +104,6 @@ class TestDagrun(unittest.TestCase):
         with create_session() as session:
             session.query(DagRun).delete()
             session.query(TI).delete()
-
-    @mock.patch.object(RayPythonOperator, '_upstream_tasks')
-    def test_on_execute_callback_3rd_try(self, _upstream_tasks_mock):
-        """Scenario where a task retries and Fault Tolerance runs in 
-        `on_retry_callback`.
-        """
-        context = self._tis[1].get_template_context()
-        context['ti']._try_number = 3
-        self._tis[1].task.on_retry_callback(context)
-
-        _upstream_tasks_mock.assert_called()
 
     def test_task_execution_without_retry(self):
         """Scenario where a task executes successfully.
@@ -261,7 +249,6 @@ class TestDagrun(unittest.TestCase):
     @mock.patch.dict('os.environ',  CHECKPOINTING_CLOUD_STORAGE="GCS")
     def test_checkpoint_flag(self):
 
-        # breakpoint()
         # Write TIs to db
         tis = list(map(self.session.merge, self._tis))
 
