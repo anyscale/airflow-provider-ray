@@ -129,6 +129,9 @@ class RayPythonOperator(PythonOperator):
 
         # If adequate cloud storage not specified, don't recover upstream objects
         if cloud_storage not in ['GCS', 'AWS']:
+            log.warn('Cloud storage not specified. \
+                Set `CHECKPOINTING_CLOUD_STORAGE` to `AWS` or `GCS` to \
+                to enable fault tolerance.')
             return
 
         log.info(f"Checkpointing output of upstream Tasks to {cloud_storage}.")
@@ -218,6 +221,9 @@ class RayPythonOperator(PythonOperator):
 
         # If adequate cloud storage not specified, don't recover upstream objects
         if cloud_storage not in ['GCS', 'AWS']:
+            log.warn('Cloud storage not specified. \
+                Set `CHECKPOINTING_CLOUD_STORAGE` to `AWS` or `GCS` to \
+                to enable fault tolerance.')
             return
 
         # Retrieve object id from xcom
@@ -233,6 +239,9 @@ class RayPythonOperator(PythonOperator):
         run_id = DagRun.generate_run_id(
             DagRunType.MANUAL, context.get('dag_run').execution_date)
 
+        log.info('Writing {} to {}. File name: {}_{}_{}'.
+                 format(obj_ref, cloud_storage, dag_id, task_id, run_id))
+
         actor_ray_kv_store.checkpoint_object.remote(
             dag_id, task_id, run_id, obj_ref, cloud_storage)
 
@@ -245,6 +254,9 @@ class RayPythonOperator(PythonOperator):
 
         # If adequate cloud storage not specified, don't recover upstream objects
         if cloud_storage not in ['GCS', 'AWS']:
+            log.warn('Cloud storage not specified. \
+                Set `CHECKPOINTING_CLOUD_STORAGE` to `AWS` or `GCS` to \
+                to enable fault tolerance.')
             return
 
         # List upstream task ids
@@ -264,7 +276,10 @@ class RayPythonOperator(PythonOperator):
         # Checkpoint all upstream objects to cloud storage
         run_id = DagRun.generate_run_id(
             DagRunType.MANUAL, context.get('dag_run').execution_date)
+
         for dag_id, task_id, obj_ref in upstream_objects:
+            log.info('Writing {} to {}. File name: {}_{}_{}'.
+                     format(obj_ref, cloud_storage, dag_id, task_id, run_id))
             actor_ray_kv_store.checkpoint_object.remote(
                 dag_id,
                 task_id,
