@@ -1,43 +1,53 @@
 from airflow.models import BaseOperator
-from hooks.ray import RayHook
+from hooks.ray_cli import RayCliHook, Command
 
-from typing import List, Union, Optional
+from typing import List, Optional
 
 
 class RaySubmitRunOperator(BaseOperator):
-    """Submit run on Ray cluster."""
+    """Submit run on a Ray cluster."""
 
     ui_color = "#08a5ec"
-    
+
     template_fields = (
-        "cluster_config",
         "script",
         "script_args",
+        "options",
+        "cluster_config_overrides",
     )
 
     def __init__(
         self,
-        cluster_config: Union[dict, str],
+        command: str,
         script: str,
-        script_args: Optional[List[str]] = None,
-        aws_conn_id: Optional[str] = None,
+        script_args: Optional[List[str]] = [],
+        options: Optional[List[str]] = [],
+        ray_conn_id: Optional[str] = "ray_default",
+        aws_conn_id: Optional[str] = "aws_default",
+        cluster_config_overrides: Optional[dict] = {},
         *args,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self.cluster_config = cluster_config
+        self.command = command
         self.script = script
         self.script_args = script_args
+        self.options = options
+        self.ray_conn_id = ray_conn_id
         self.aws_conn_id = aws_conn_id
+        self.cluster_config_overrides = cluster_config_overrides
 
     def get_hook(self):
-        return RayHook(
-            cluster_config=self.cluster_config,
+        return RayCliHook(
+            command=Command.SUBMIT,
             script=self.script,
             script_args=self.script_args,
+            options=self.options,
+            ray_conn_id=self.ray_conn_id,
             aws_conn_id=self.aws_conn_id,
+            cluster_config_overrides=self.cluster_config_overrides,
         )
 
     def execute(self, context):
         self.hook = self.get_hook()
-        self.hook.submit_job()
+        self.hook.run_cli()
