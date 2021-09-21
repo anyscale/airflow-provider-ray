@@ -17,7 +17,25 @@ class Command:
 
 
 class RayCliHook(BaseHook):
-    """Simple wrapper around the Ray CLI."""
+    """Simple wrapper around the Ray CLI.
+
+    :param command: [description]
+    :type command: str
+    :param script: [description]
+    :type script: str
+    :param script_args: [description], defaults to []
+    :type script_args: Optional[List[str]], optional
+    :param options: [description], defaults to []
+    :type options: Optional[List[str]], optional
+    :param ray_conn_id: [description], defaults to "ray_default"
+    :type ray_conn_id: Optional[str], optional
+    :param aws_conn_id: [description], defaults to "aws_default"
+    :type aws_conn_id: Optional[str], optional
+    :param cluster_config_overrides: [description], defaults to {}
+    :type cluster_config_overrides: Optional[dict], optional
+    :param verbose: [description], defaults to True
+    :type verbose: Optional[bool], optional
+    """
 
     def __init__(
         self,
@@ -28,6 +46,7 @@ class RayCliHook(BaseHook):
         ray_conn_id: Optional[str] = "ray_default",
         aws_conn_id: Optional[str] = "aws_default",
         cluster_config_overrides: Optional[dict] = {},
+        verbose: Optional[bool] = True,
     ):
         supported_cli_cmds = [Command.UP, Command.DOWN, Command.SUBMIT]
         if command not in supported_cli_cmds:
@@ -40,6 +59,7 @@ class RayCliHook(BaseHook):
         self.ray_conn_id = ray_conn_id
         self.aws_conn_id = aws_conn_id
         self.cluster_config_overrides = cluster_config_overrides
+        self.verbose = verbose
 
         self.ray_dir = Path("/tmp/ray")
         if not self.ray_dir.exists():
@@ -89,10 +109,10 @@ class RayCliHook(BaseHook):
 
         return cli_cmd
 
-    def run_cli(self, verbose=True):
+    def run_cli(self):
         cmd = self._prepare_cli_cmd()
 
-        if verbose:
+        if self.verbose:
             self.log.info("%s", " ".join(cmd))
 
         p = subprocess.Popen(
@@ -107,7 +127,7 @@ class RayCliHook(BaseHook):
             if not line:
                 break
             stdout += line.decode("UTF-8")
-            if verbose:
+            if self.verbose:
                 self.log.info(line.decode("UTF-8").strip())
         p.wait()
 
