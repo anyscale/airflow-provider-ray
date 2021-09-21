@@ -7,21 +7,22 @@ from typing import List, Optional
 class RayStartClusterOperator(BaseOperator):
     """Start Ray cluster.
 
-    :param command: [description]
-    :type command: str
-    :param script: [description]
+    :param script: Location of your ray python script. If you are storing this value in s3, please include an
+            aws_conn_id Connection for accessing s3.
     :type script: str
-    :param script_args: [description], defaults to []
+    :param script_args: List of arguments for your python script, defaults to []
     :type script_args: Optional[List[str]], optional
-    :param options: [description], defaults to []
+    :param options: Options for your ray command. For documentation on options please look here
+            https://docs.ray.io/en/latest/package-ref.html#the-ray-command-line-api, defaults to []
     :type options: Optional[List[str]], optional
-    :param ray_conn_id: [description], defaults to "ray_default"
+    :param ray_conn_id: Connection ID for accessing ray cluster config from extra field as json, defaults to "ray_default"
     :type ray_conn_id: Optional[str], optional
-    :param aws_conn_id: [description], defaults to "aws_default"
+    :param aws_conn_id: Connection ID for accessing s3 to retrieve script, defaults to "aws_default"
     :type aws_conn_id: Optional[str], optional
-    :param cluster_config_overrides: [description], defaults to {}
+    :param cluster_config_overrides: Dict of overrides to call on the cluster config extracted from the ray connection extra field. 
+            Ex. cluster_config.update(cluster_config_overrides) , defaults to {}
     :type cluster_config_overrides: Optional[dict], optional
-    :param verbose: [description], defaults to True
+    :param verbose: Bool to print standard out from the ray cli, defaults to True
     :type verbose: Optional[bool], optional
     """
 
@@ -36,7 +37,6 @@ class RayStartClusterOperator(BaseOperator):
 
     def __init__(
         self,
-        command: str,
         script: str,
         script_args: Optional[List[str]] = [],
         options: Optional[List[str]] = [],
@@ -48,7 +48,6 @@ class RayStartClusterOperator(BaseOperator):
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self.command = command
         self.script = script
         self.script_args = script_args
         self.options = options
