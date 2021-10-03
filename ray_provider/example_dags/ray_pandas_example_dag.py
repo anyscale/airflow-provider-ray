@@ -6,15 +6,12 @@ import ray
 from ray_provider.decorators.ray_decorators import ray_task
 import numpy as np
 import pandas as pd
-from ray_provider.xcom.ray_backend import RayBackend
 from datetime import datetime
 
 # These args will get passed on to each operator
 # You can override them on a per-task basis during operator initialization
 default_args = {
     "owner": "airflow",
-    "on_success_callback": RayBackend.on_success_callback,
-    "on_failure_callback": RayBackend.on_failure_callback,
 }
 
 
