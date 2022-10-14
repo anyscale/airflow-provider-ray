@@ -17,3 +17,6 @@ airflow_provider_ray.egg-info/*
 .idea
 .idea/
 *.iml
+
+# VsCode
+.vscode

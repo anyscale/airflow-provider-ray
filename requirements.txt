@@ -5,3 +5,4 @@ numpy
 pandas==1.2.4
 modin
 xgboost_ray
+anyscale
