@@ -26,10 +26,14 @@ class AnyscaleProductionJobSensor(AnyscaleBaseSensor):
         self.production_job_id = production_job_id
 
     def _fetch_logs(self):
-        result = self.sdk.get_production_job_logs(
-            self.production_job_id).result
 
-        return result.logs
+        try:
+            logs = self.sdk.get_production_job_logs(
+                self.production_job_id).results.logs
+            self.log.info("logs: \n %s", logs)
+
+        except Exception:
+            self.log.warning("logs not found for %s", self.production_job_id) 
 
     def poke(self, context: Context) -> bool:
 
@@ -46,6 +50,7 @@ class AnyscaleProductionJobSensor(AnyscaleBaseSensor):
             self.log.info(operation_message)
 
         if state.current_state in ("OUT_OF_RETRIES", "TERMINATED", "ERRORED"):
+            self._fetch_logs()
             raise AirflowException(
                 "job ended with status {}, error: {}".format(
                     state.current_state,
@@ -57,17 +62,11 @@ class AnyscaleProductionJobSensor(AnyscaleBaseSensor):
             return False
 
         self.log.info(
-            "job %s reached goal state %s", state.production_job_id, state.goal_state)
+            "job %s reached goal state %s", self.production_job_id, state.goal_state)
 
         took = state.state_transitioned_at - production_job.created_at
 
         self.log.info("duration: %s", took.total_seconds())
-
-        try:
-            logs = self._fetch_logs()
-            self.log.info("logs: \n %s", logs)
-
-        except Exception:
-            self.log.warning("logs not found for %s", self.production_job_id)
+        self._fetch_logs()
 
         return True
