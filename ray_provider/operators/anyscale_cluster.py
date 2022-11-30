@@ -22,7 +22,7 @@ class AnyscaleCreateClusterOperator(AnyscaleBaseOperator):
     :param name: Name of the Cluster. (templated)
     :param cluster_environment_build_id: Cluster Environment Build ID that the Cluster is using. (templated)
     :param docker: Docker image for BYOD. (templated)
-    :param project_id: Project that this Cluster belongs to. If none, this Cluster will use the default Project. (templated)
+    :param project_id: Project that this Cluster belongs to. If none, the Cluster will use the default Project. (templated)
     :param ray_version: Ray version (only used for BYOD). (templated)
     :param python_version: Python version (only used for BYOD). (templated)
     :param compute_config_id: Cluster Compute that this Cluster is using. (templated)
