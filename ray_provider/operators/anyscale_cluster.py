@@ -25,7 +25,7 @@ class AnyscaleCreateClusterOperator(AnyscaleBaseOperator):
     :param project_id: Project that this Cluster belongs to. If none, the Cluster will use the default Project. (templated)
     :param ray_version: Ray version (only used for BYOD). (templated)
     :param python_version: Python version (only used for BYOD). (templated)
-    :param compute_config_id: Cluster Compute that this Cluster is using. (templated)
+    :param compute_config_id: Cluster Compute that the Cluster is using. (templated)
     """
 
     template_fields: Sequence[str] = [
