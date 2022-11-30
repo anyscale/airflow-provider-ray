@@ -19,7 +19,7 @@ class AnyscaleCreateClusterOperator(AnyscaleBaseOperator):
     """
     An operator that creates a Cluster.
 
-    :param name: Name of this Cluster. (templated)
+    :param name: Name of the Cluster. (templated)
     :param cluster_environment_build_id: Cluster Environment Build that this Cluster is using. (templated)
     :param docker: Docker image for BYOD. (templated)
     :param project_id: Project that this Cluster belongs to. If none, this Cluster will use the default Project. (templated)
