@@ -17,6 +17,7 @@ class AnyscaleCreateSessionCommandOperator(AnyscaleBaseOperator):
     :param session_id: ID of the Session to execute this command on. (templated)
     :param shell_command: Shell command string that will be executed. (templated)
     :param wait_for_completion: If True, waits for creation of the cluster to complete. (default: True)
+    :param poke_interval: Poke interval that the operator will use to check if the session command has finished. (default: 60)
     """
 
     template_fields: Sequence[str] = [
@@ -60,7 +61,7 @@ class AnyscaleCreateSessionCommandOperator(AnyscaleBaseOperator):
                 auth_token=self.auth_token,
             ).poke(context):
 
-                time.sleep(_POKE_INTERVAL)
+                time.sleep(self.poke_interval)
 
         push_to_xcom(session_command_response.to_dict(),
                      context, self._ignore_keys)

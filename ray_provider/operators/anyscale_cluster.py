@@ -12,8 +12,6 @@ from airflow.exceptions import AirflowException
 from anyscale.shared_anyscale_utils.utils.byod import BYODInfo
 from anyscale.sdk.anyscale_client.models.cluster import Cluster
 
-_POKE_INTERVAL = 60
-
 
 class AnyscaleCreateClusterOperator(AnyscaleBaseOperator):
     """
@@ -23,8 +21,8 @@ class AnyscaleCreateClusterOperator(AnyscaleBaseOperator):
     :param cluster_environment_build_id: Cluster Environment Build ID that the Cluster is using. (templated)
     :param docker: Docker image for BYOD. (templated)
     :param project_id: Project that this Cluster belongs to. If none, the Cluster will use the default Project. (templated)
-    :param ray_version: Ray version (only used for BYOD). (templated)
-    :param python_version: Python version (only used for BYOD). (templated)
+    :param ray_version: Ray version (only used for BYOD). (templated) (default: "1.13.0")
+    :param python_version: Python version (only used for BYOD). (templated) (default: "py38")
     :param compute_config_id: Cluster Compute that the Cluster is using. (templated)
     """
 
@@ -46,8 +44,8 @@ class AnyscaleCreateClusterOperator(AnyscaleBaseOperator):
         cluster_environment_build_id: str = None,
         docker: str = None,
         project_id: str = None,
-        ray_version: Optional[str] = None,
-        python_version: Optional[str] = None,
+        ray_version: Optional[str] = "1.13.0",
+        python_version: Optional[str] = "py38",
         compute_config_id: Optional[str] = None,
         **kwargs,
     ):
@@ -58,8 +56,8 @@ class AnyscaleCreateClusterOperator(AnyscaleBaseOperator):
         self.docker = docker
         self.cluster_environment_build_id = cluster_environment_build_id
 
-        self.ray_version = ray_version or "1.13.0"
-        self.python_version = python_version or "py38"
+        self.ray_version = ray_version
+        self.python_version = python_version
         self.compute_config_id = compute_config_id
 
         self._ignore_keys = [
@@ -140,6 +138,7 @@ class AnyscaleStartClusterOperator(AnyscaleBaseOperator):
     :param cluster_id: ID of the Cluster to start. (templated)
     :param start_cluster_options: Options to set when starting a cluster. (templated)
     :param wait_for_completion: If True, waits for creation of the cluster to complete. (default: True)
+    :param poke_interval: Poke interval that the operator will use to check if the cluster is started. (default: 60)
     """
 
     template_fields: Sequence[str] = [
@@ -184,7 +183,7 @@ class AnyscaleStartClusterOperator(AnyscaleBaseOperator):
                 auth_token=self.auth_token,
             ).poke(context):
 
-                time.sleep(_POKE_INTERVAL)
+                time.sleep(self.poke_interval)
 
         push_to_xcom(cluster_operation.to_dict(), context, self._ignore_keys)
 
@@ -195,6 +194,7 @@ class AnyscaleTerminateClusterOperator(AnyscaleBaseOperator):
     :param cluster_id: ID of the Cluster to terminate. (templated)
     :param terminate_cluster_options: Options to set when terminating a Cluster. (templated)
     :param wait_for_completion: If True, waits for creation of the cluster to complete. (default: True)
+    :param poke_interval: Poke interval that the operator will use to check if the cluster is terminated. (default: 60)
     """
 
     template_fields: Sequence[str] = [
@@ -237,6 +237,6 @@ class AnyscaleTerminateClusterOperator(AnyscaleBaseOperator):
                 auth_token=self.auth_token,
             ).poke(context):
 
-                time.sleep(_POKE_INTERVAL)
+                time.sleep(self.poke_interval)
 
         push_to_xcom(cluster_operation.to_dict(), context, self._ignore_keys)

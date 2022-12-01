@@ -1,6 +1,7 @@
 from anyscale import AnyscaleSDK
 from airflow.utils.context import Context
 
+from typing import Optional
 from airflow.models.baseoperator import BaseOperator
 from airflow.compat.functools import cached_property
 
@@ -15,9 +16,11 @@ class AnyscaleBaseOperator(BaseOperator):
         self,
         *,
         auth_token: str,
+        poke_interval: Optional[int] = 60,
         **kwargs
     ):
         self.auth_token = auth_token
+        self.poke_interval = poke_interval
         super().__init__(**kwargs)
 
     @cached_property

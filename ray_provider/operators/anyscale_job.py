@@ -11,8 +11,6 @@ from ray_provider.sensors.anyscale_job import AnyscaleProductionJobSensor
 from anyscale.shared_anyscale_utils.utils.byod import BYODInfo
 from anyscale.sdk.anyscale_client.models.create_production_job import CreateProductionJob
 
-_POKE_INTERVAL = 60
-
 
 class AnyscaleCreateProductionJobOperator(AnyscaleBaseOperator):
     """
@@ -32,8 +30,8 @@ class AnyscaleCreateProductionJobOperator(AnyscaleBaseOperator):
         Your entrypoint will be run in the environment specified by this runtime env. (templated)
     :param compute_config_id: The id of the compute configuration that you want to use.
         This id will specify the resources required for your job. (templated)
-    :param ray_version: Ray version (only used for BYOD). (templated)
-    :param python_version: Python version (only used for BYOD). (templated)
+    :param ray_version: Ray version (only used for BYOD). (templated) (default: "1.13.0")
+    :param python_version: Python version (only used for BYOD). (templated) (default: "py38")
     :param wait_for_completion: If True, waits for creation of the cluster to complete. (default: True)
     """
 
@@ -62,8 +60,8 @@ class AnyscaleCreateProductionJobOperator(AnyscaleBaseOperator):
         description: str = None,
         runtime_env: dict = None,
         compute_config_id: str = None,
-        ray_version: Optional[str] = None,
-        python_version: Optional[str] = None,
+        ray_version: Optional[str] = "1.13.0",
+        python_version: Optional[str] = "py38",
         wait_for_completion: Optional[bool] = True,
         **kwargs,
     ):
@@ -77,8 +75,8 @@ class AnyscaleCreateProductionJobOperator(AnyscaleBaseOperator):
         self.max_retries = max_retries
         self.runtime_env = runtime_env
         self.compute_config_id = compute_config_id
-        self.ray_version = ray_version or "1.13.0"
-        self.python_version = python_version or "py38"
+        self.ray_version = ray_version
+        self.python_version = python_version
         self.build_id = build_id
 
         self.wait_for_completion = wait_for_completion
@@ -137,7 +135,7 @@ class AnyscaleCreateProductionJobOperator(AnyscaleBaseOperator):
                 auth_token=self.auth_token,
             ).poke(context):
 
-                time.sleep(_POKE_INTERVAL)
+                time.sleep(self.poke_interval)
 
         push_to_xcom(production_job.to_dict(), context,
                      ignore_keys=self._ignore_keys)
