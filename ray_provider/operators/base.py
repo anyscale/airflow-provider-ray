@@ -10,6 +10,7 @@ class AnyscaleBaseOperator(BaseOperator):
     """
     Anyscale Base Operator.
     :param auth_token: Anyscale CLI token.
+    :param poke_interval: Time in seconds that the operator should wait for completion. (default: 60)
     """
 
     def __init__(

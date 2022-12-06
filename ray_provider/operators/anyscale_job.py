@@ -33,6 +33,7 @@ class AnyscaleCreateProductionJobOperator(AnyscaleBaseOperator):
     :param ray_version: Ray version (only used for BYOD). (templated) (default: "1.13.0")
     :param python_version: Python version (only used for BYOD). (templated) (default: "py38")
     :param wait_for_completion: If True, waits for creation of the cluster to complete. (default: True)
+    :param poke_interval: Poke interval that the operator will use to check if the cluster is started. (default: 60)
     """
 
     template_fields: Sequence[str] = [
