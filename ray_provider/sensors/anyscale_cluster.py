@@ -22,7 +22,7 @@ class AnyscaleClusterSensor(AnyscaleBaseSensor):
         cluster_id: str,
         **kwargs,
     ):
-    
+
         super().__init__(**kwargs)
         self.cluster_id = cluster_id
 
@@ -51,7 +51,7 @@ class AnyscaleClusterSensor(AnyscaleBaseSensor):
 
         self.log.info("current state: %s, goal state: %s", state, goal_state)
 
-        if goal_state is not None:
+        if goal_state is not None and goal_state != state:
             return False
 
         self.log.info("cluster reached goal state: %s", state)
