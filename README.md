@@ -14,6 +14,8 @@
 
 ## 🧪 Experimental Version
 
+UPDATE: As of Feb 6 2024 this repository is no longer being actively worked on/maintained by Anyscale.
+
 This provider is an experimental alpha containing necessary components to
 orchestrate and schedule Ray tasks using Airflow. It is actively maintained
 and being developed to bring production-ready workflows to Ray using Airflow.
