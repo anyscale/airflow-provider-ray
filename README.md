@@ -20,7 +20,7 @@ This provider is an experimental alpha containing necessary components to
 orchestrate and schedule Ray tasks using Airflow. It is actively maintained
 and being developed to bring production-ready workflows to Ray using Airflow.
 Thie release contains everything needed to begin building these workflows using
-the Airlfow taskflow API.
+the Airflow taskflow API.
 
 ```yaml
 Current Release: 0.2.1
