@@ -1,3 +1,5 @@
+> ⚠️ This repository is no longer maintained by Anyscale. The Ray operator is now part of the Apache Airflow Google provider: https://github.com/apache/airflow/blob/main/providers/google/src/airflow/providers/google/cloud/operators/ray.py
+
 <p align="center">
   <a href="https://www.airflow.apache.org">
     <img alt="Airflow" src="https://cwiki.apache.org/confluence/download/attachments/145723561/airflow_transparent.png?api=v2" width="60" />
